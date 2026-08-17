@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2.5 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 focus:ring-4 focus:ring-primary-200 transition-all;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2.5 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 focus:ring-4 focus:ring-slate-200 transition-all;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2.5 bg-danger-600 text-white font-medium rounded-xl hover:bg-danger-700 focus:ring-4 focus:ring-danger-200 transition-all;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-card hover:shadow-card-hover transition-shadow duration-300;
+  }
+
+  .input {
+    @apply w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200;
+  }
+
+  .sidebar-item-active {
+    @apply bg-primary-50 text-primary-700 font-medium;
+  }
+
+  .sidebar-item-inactive {
+    @apply text-slate-600 hover:bg-slate-50 hover:text-slate-900;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* ---- Tabulator theme override: fit the Tailwind slate look ---- */
+.tabulator-theme-override .tabulator {
+  border: none;
+  border-radius: 0;
+  font-size: 0.875rem;
+  color: #0f172a;
+}
+
+.tabulator-theme-override .tabulator-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  color: #475569;
+  font-weight: 600;
+}
+
+.tabulator-theme-override .tabulator-header .tabulator-col {
+  background: #f8fafc;
+  border-right: 1px solid #f1f5f9;
+}
+
+.tabulator-theme-override .tabulator-header .tabulator-col .tabulator-col-content {
+  padding: 10px 12px;
+}
+
+.tabulator-theme-override .tabulator-row {
+  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
+}
+
+.tabulator-theme-override .tabulator-row.tabulator-row-even {
+  background: #ffffff;
+}
+
+.tabulator-theme-override .tabulator-row:hover {
+  background: #f8fafc;
+}
+
+.tabulator-theme-override .tabulator-cell {
+  padding: 10px 12px;
+  border-right: 1px solid #f8fafc;
+}
+
+.tabulator-theme-override .tabulator-footer {
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 0.8125rem;
+}
+
+.tabulator-theme-override .tabulator-footer .tabulator-page-counter {
+  color: #64748b;
+}
+
+.tabulator-theme-override .tabulator-footer .tabulator-paginator {
+  color: #475569;
+}
+
+.tabulator-theme-override .tabulator-footer .tabulator-page {
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 4px 10px;
+  margin: 0 2px;
+  font-size: 0.8125rem;
+}
+
+.tabulator-theme-override .tabulator-footer .tabulator-page.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.tabulator-theme-override .tabulator-footer .tabulator-page:not(.active):hover {
+  background: #f1f5f9;
+}
+
+.tabulator-theme-override .tabulator-footer .tabulator-page-size select {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 4px 8px;
+  background: #ffffff;
+}
+
+.tabulator-theme-override .tabulator-header-filter input,
+.tabulator-theme-override .tabulator-header-filter select {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: #0f172a;
+  background: #ffffff;
+  width: 100%;
+}
+
+.tabulator-theme-override .tabulator-header-filter input:focus,
+.tabulator-theme-override .tabulator-header-filter select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.tabulator-theme-override .dt-range-filter {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.tabulator-theme-override .dt-filter-input {
+  min-width: 0;
+  flex: 1;
+}
+
+.tabulator-theme-override .dt-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabulator-theme-override .tabulator-sortable.tabulator-col-sorter-alt .tabulator-col-sorter {
+  color: #94a3b8;
+}
+
+.tabulator-theme-override .tabulator-placeholder {
+  color: #94a3b8;
+  font-size: 0.875rem;
+}

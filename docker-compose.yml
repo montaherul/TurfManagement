@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: turfcare-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: turfmanagement_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: turfmanagement
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - turfcare-network
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: turfcare-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - turfcare-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: turfcare-backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://turfmanagement_user:${POSTGRES_PASSWORD}@postgres:5432/turfmanagement
+      - REDIS_URL=redis://redis:6379
+      - PORT=5000
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./uploads:/app/uploads
+      - ./backend/logs:/app/logs
+    networks:
+      - turfcare-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: turfcare-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - turfcare-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  turfcare-network:
+    driver: bridge
