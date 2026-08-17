@@ -11,15 +11,20 @@ import { logger } from './utils/logger.js';
 const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
 
 let serverInstance = null;
-let ioInstance = null;
 
 const bootstrap = async () => {
-  await connectDB();
-  const redis = await connectRedis();
+  try {
+    await connectDB();
+  } catch (dbError) {
+    console.error('[startup] Database connection failed:', dbError);
+    throw dbError;
+  }
 
+  const redis = await connectRedis();
   const app = createApp({ redis });
 
   if (isVercel) {
+    console.log('[startup] Running in Vercel serverless mode');
     return app;
   }
 
@@ -32,7 +37,6 @@ const bootstrap = async () => {
       credentials: true,
     },
   });
-  ioInstance = io;
   initializeSocket(io);
 
   server.listen(env.port, () => {
@@ -46,7 +50,7 @@ const bootstrap = async () => {
 const app = await bootstrap();
 
 process.on('unhandledRejection', (err) => {
-  logger.error('Unhandled Promise Rejection:', err);
+  console.error('Unhandled Promise Rejection:', err);
   if (serverInstance) {
     serverInstance.close(async () => {
       await disconnectDB();
@@ -58,7 +62,7 @@ process.on('unhandledRejection', (err) => {
 });
 
 process.on('SIGINT', async () => {
-  logger.info('Shutting down gracefully...');
+  console.log('Shutting down gracefully...');
   if (serverInstance) {
     serverInstance.close(async () => {
       await disconnectDB();
@@ -70,7 +74,7 @@ process.on('SIGINT', async () => {
 });
 
 process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down...');
+  console.log('SIGTERM received, shutting down...');
   if (serverInstance) {
     serverInstance.close(async () => {
       await disconnectDB();
