@@ -9,12 +9,13 @@
   "start": "node src/server.js",
   "lint": "eslint src --ext .js",
   "test": "jest --coverage",
+  "build": "prisma generate",
+  "postinstall": "prisma generate",
   "db:migrate": "prisma migrate deploy",
   "db:dev": "prisma migrate dev",
   "db:seed": "node scripts/seed.js",
   "db:procedures": "node scripts/install_procedures.mjs",
-  "db:studio": "prisma studio",
-  "build": "prisma generate"
+  "db:studio": "prisma studio"
 },
     "jest":  {
                  "testEnvironment":  "node",
