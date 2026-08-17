@@ -28,6 +28,7 @@ import {
   getScoreDistribution,
   getWorkOrderStatus,
   getMaintenanceCosts,
+  getCostByField,
 } from '../../store/slices/analyticsSlice';
 import {
   statusBadge,
@@ -82,6 +83,7 @@ const Reports = () => {
     scoreDistribution,
     workOrderStatus,
     maintenanceCosts,
+    costByField,
     loading,
     error,
   } = useSelector((state) => state.analytics);
@@ -92,6 +94,7 @@ const Reports = () => {
     dispatch(getScoreDistribution());
     dispatch(getWorkOrderStatus());
     dispatch(getMaintenanceCosts());
+    dispatch(getCostByField());
   };
 
   useEffect(() => {
@@ -116,6 +119,11 @@ const Reports = () => {
     name: s.month,
     estimated: Number(s.estimated_total ?? s.estimated ?? 0),
     actual: Number(s.actual_total ?? s.actual ?? 0),
+  }));
+  const costByFieldData = (costByField || []).map((s) => ({
+    name: s.fieldName,
+    estimated: Number(s.estimated || 0),
+    actual: Number(s.actual || 0),
   }));
 
   const inspectionColumns = [
@@ -209,6 +217,24 @@ const Reports = () => {
                 <Area type="monotone" dataKey="estimated" stroke="#f59e0b" fill="url(#costGradient)" strokeWidth={2} name="Estimated" />
                 <Area type="monotone" dataKey="actual" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} name="Actual" />
               </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart />
+          )}
+        </ChartCard>
+
+        <ChartCard title="Cost by Field">
+          {costByFieldData.length ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={costByFieldData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis type="number" stroke="#64748b" fontSize={12} />
+                <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={12} width={150} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend />
+                <Bar dataKey="estimated" fill="#f59e0b" radius={[0, 8, 8, 0]} name="Estimated" />
+                <Bar dataKey="actual" fill="#3b82f6" radius={[0, 8, 8, 0]} name="Actual" />
+              </BarChart>
             </ResponsiveContainer>
           ) : (
             <EmptyChart />

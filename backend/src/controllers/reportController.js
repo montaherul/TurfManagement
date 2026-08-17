@@ -29,7 +29,12 @@ export const createReportController = ({ reportService }) => {
     return successResponse(res, { costs });
   };
 
-  return { getAnalytics, getScoreTrends, getScoreDistribution, getWorkOrderStatus, getMaintenanceCosts };
+  const getCostByField = async (req, res) => {
+    const costs = await reportService.getCostByField(req.organizationId);
+    return successResponse(res, { costs });
+  };
+
+  return { getAnalytics, getScoreTrends, getScoreDistribution, getWorkOrderStatus, getMaintenanceCosts, getCostByField };
 };
 
 export default createReportController;

@@ -27,4 +27,9 @@ export const reportService = {
     const response = await api.get('/reports/maintenance-costs');
     return response.data;
   },
+
+  getCostByField: async () => {
+    const response = await api.get('/reports/cost-by-field');
+    return response.data;
+  },
 };

@@ -52,6 +52,23 @@ export const analyticsRepository = {
       actualTotal: r.actual_total,
     }));
   },
+
+  costByField: async (organizationId) => {
+    const rows = await prisma.$queryRaw`
+      SELECT f.id AS fieldId, f.name AS fieldName, SUM(wo.estimated_cost->>'amount')::float AS estimated, SUM(wo.actual_cost->>'amount')::float AS actual
+      FROM "WorkOrder" wo
+      JOIN "Field" f ON f.id = wo.fieldId
+      WHERE wo.organizationId = ${organizationId}
+      GROUP BY f.id, f.name
+      ORDER BY estimated DESC
+    `;
+    return rows.map((r) => ({
+      fieldId: r.fieldId,
+      fieldName: r.fieldName,
+      estimated: r.estimated || 0,
+      actual: r.actual || 0,
+    }));
+  },
 };
 
 export default analyticsRepository;

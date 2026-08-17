@@ -25,7 +25,11 @@ export const createReportService = ({ analyticsRepository }) => {
     return analyticsRepository.maintenanceCosts(organizationId);
   };
 
-  return { getAnalytics, getScoreTrends, getScoreDistribution, getWorkOrderStatus, getMaintenanceCosts };
+  const getCostByField = async (organizationId) => {
+    return analyticsRepository.costByField(organizationId);
+  };
+
+  return { getAnalytics, getScoreTrends, getScoreDistribution, getWorkOrderStatus, getMaintenanceCosts, getCostByField };
 };
 
 export default createReportService;

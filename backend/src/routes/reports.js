@@ -11,5 +11,6 @@ router.get('/score-trends', asyncHandler(reportController.getScoreTrends));
 router.get('/score-distribution', asyncHandler(reportController.getScoreDistribution));
 router.get('/workorder-status', asyncHandler(reportController.getWorkOrderStatus));
 router.get('/maintenance-costs', asyncHandler(reportController.getMaintenanceCosts));
+router.get('/cost-by-field', asyncHandler(reportController.getCostByField));
 
 export default router;

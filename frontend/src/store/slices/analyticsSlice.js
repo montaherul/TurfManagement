@@ -61,12 +61,25 @@ export const getMaintenanceCosts = createAsyncThunk(
   }
 );
 
+export const getCostByField = createAsyncThunk(
+  'analytics/getCostByField',
+  async (_, { rejectWithValue }) => {
+    try {
+      const payload = await reportService.getCostByField();
+      return payload.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch cost by field');
+    }
+  }
+);
+
 const initialState = {
   analytics: null,
   scoreTrends: [],
   scoreDistribution: [],
   workOrderStatus: [],
   maintenanceCosts: [],
+  costByField: [],
   loading: false,
   error: null,
 };
@@ -104,6 +117,9 @@ const analyticsSlice = createSlice({
       })
       .addCase(getMaintenanceCosts.fulfilled, (state, action) => {
         state.maintenanceCosts = action.payload.costs || action.payload.byMonth || [];
+      })
+      .addCase(getCostByField.fulfilled, (state, action) => {
+        state.costByField = action.payload.costs || action.payload.byField || [];
       });
   },
 });
