@@ -8,12 +8,23 @@ import { startBillingScheduler } from './jobs/billingScheduler.js';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 
-const startServer = async () => {
+const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+
+let serverInstance = null;
+let ioInstance = null;
+
+const bootstrap = async () => {
   await connectDB();
   const redis = await connectRedis();
 
   const app = createApp({ redis });
+
+  if (isVercel) {
+    return app;
+  }
+
   const server = http.createServer(app);
+  serverInstance = server;
 
   const io = new Server(server, {
     cors: {
@@ -21,6 +32,7 @@ const startServer = async () => {
       credentials: true,
     },
   });
+  ioInstance = io;
   initializeSocket(io);
 
   server.listen(env.port, () => {
@@ -28,33 +40,45 @@ const startServer = async () => {
     startBillingScheduler();
   });
 
-  return { app, server, io };
+  return app;
 };
 
-const { server } = await startServer();
+const app = await bootstrap();
 
 process.on('unhandledRejection', (err) => {
   logger.error('Unhandled Promise Rejection:', err);
-  server.close(async () => {
-    await disconnectDB();
+  if (serverInstance) {
+    serverInstance.close(async () => {
+      await disconnectDB();
+      process.exit(1);
+    });
+  } else {
     process.exit(1);
-  });
+  }
 });
 
 process.on('SIGINT', async () => {
   logger.info('Shutting down gracefully...');
-  server.close(async () => {
-    await disconnectDB();
+  if (serverInstance) {
+    serverInstance.close(async () => {
+      await disconnectDB();
+      process.exit(0);
+    });
+  } else {
     process.exit(0);
-  });
+  }
 });
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down...');
-  server.close(async () => {
-    await disconnectDB();
+  if (serverInstance) {
+    serverInstance.close(async () => {
+      await disconnectDB();
+      process.exit(0);
+    });
+  } else {
     process.exit(0);
-  });
+  }
 });
 
-export default server;
+export default app;

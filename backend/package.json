@@ -4,17 +4,18 @@
     "description":  "TurfCare BD - Enterprise Turf Management API",
     "main":  "src/server.js",
     "type":  "module",
-    "scripts":  {
-                    "dev":  "nodemon src/server.js",
-                    "start":  "node src/server.js",
-                    "lint":  "eslint src --ext .js",
-                    "test":  "jest --coverage",
-                    "db:migrate":  "prisma migrate deploy",
-                    "db:dev":  "prisma migrate dev",
-                    "db:seed":  "node scripts/seed.js",
-                    "db:procedures":  "node scripts/install_procedures.mjs",
-                    "db:studio":  "prisma studio"
-                },
+"scripts": {
+  "dev": "nodemon src/server.js",
+  "start": "node src/server.js",
+  "lint": "eslint src --ext .js",
+  "test": "jest --coverage",
+  "db:migrate": "prisma migrate deploy",
+  "db:dev": "prisma migrate dev",
+  "db:seed": "node scripts/seed.js",
+  "db:procedures": "node scripts/install_procedures.mjs",
+  "db:studio": "prisma studio",
+  "build": "prisma generate"
+},
     "jest":  {
                  "testEnvironment":  "node",
                  "testMatch":  [
