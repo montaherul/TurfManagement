@@ -6,7 +6,10 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import {
   listOrganizationsSchema,
   updateOrganizationSettingsSchema,
+  updateOrganizationSchema,
+  suspendOrganizationSchema,
 } from '../validators/adminValidator.js';
+import { idParamSchema } from '../validators/common.js';
 import { services } from '../config/container.js';
 import { createOrganizationController } from '../controllers/organizationController.js';
 
@@ -25,8 +28,8 @@ router.put(
   asyncHandler(organizationController.updateSettings)
 );
 router.get('/', authorize('super_admin'), validate(listOrganizationsSchema), asyncHandler(organizationController.getOrganizations));
-router.get('/:id', authorize('super_admin'), asyncHandler(organizationController.getOrganization));
-router.put('/:id', authorize('super_admin'), asyncHandler(organizationController.updateOrganization));
-router.patch('/:id/suspend', authorize('super_admin'), asyncHandler(organizationController.suspendOrganization));
+router.get('/:id', authorize('super_admin'), validate(idParamSchema), asyncHandler(organizationController.getOrganization));
+router.put('/:id', authorize('super_admin'), validate(updateOrganizationSchema), asyncHandler(organizationController.updateOrganization));
+router.patch('/:id/suspend', authorize('super_admin'), validate(suspendOrganizationSchema), asyncHandler(organizationController.suspendOrganization));
 
 export default router;

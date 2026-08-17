@@ -8,7 +8,11 @@ import {
   listAdminFieldsSchema,
   listAuditLogsSchema,
   listOrganizationsSchema,
+  updateUserRoleSchema,
+  updateRolePermissionsSchema,
+  updateUserPermissionsSchema,
 } from '../validators/adminValidator.js';
+import { idParamSchema } from '../validators/common.js';
 import { services } from '../config/container.js';
 import { createAdminController } from '../controllers/adminController.js';
 import { createPermissionController } from '../controllers/permissionController.js';
@@ -26,10 +30,10 @@ router.get('/audit-logs', authorize('super_admin'), validate(listAuditLogsSchema
 
 router.get('/permissions/catalog', authorize('super_admin'), asyncHandler(permissionController.getCatalog));
 router.get('/permissions/roles', authorize('super_admin'), asyncHandler(permissionController.getRolePermissions));
-router.put('/permissions/roles/:role', authorize('super_admin'), asyncHandler(permissionController.updateRolePermissions));
-router.get('/permissions/users/:id', authorize('super_admin'), asyncHandler(permissionController.getUserPermissions));
-router.put('/permissions/users/:id', authorize('super_admin'), asyncHandler(permissionController.updateUserPermissions));
-router.put('/users/:id', authorize('super_admin'), asyncHandler(permissionController.updateUserRole));
+router.put('/permissions/roles/:role', authorize('super_admin'), validate(updateRolePermissionsSchema), asyncHandler(permissionController.updateRolePermissions));
+router.get('/permissions/users/:id', authorize('super_admin'), validate(idParamSchema), asyncHandler(permissionController.getUserPermissions));
+router.put('/permissions/users/:id', authorize('super_admin'), validate(updateUserPermissionsSchema), asyncHandler(permissionController.updateUserPermissions));
+router.put('/users/:id', authorize('super_admin'), validate(updateUserRoleSchema), asyncHandler(permissionController.updateUserRole));
 router.get('/permissions/organizations/:orgId/roles', authorize('super_admin'), (req, _res, next) => {
   req.organizationId = req.params.orgId;
   next();

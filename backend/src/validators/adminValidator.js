@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from './common.js';
+import { paginationQuerySchema, idParamSchema } from './common.js';
 
 export const createAdminUserSchema = z.object({
   body: z.object({
@@ -34,4 +34,53 @@ export const updateOrganizationSettingsSchema = z.object({
         .optional(),
     })
     .strict(),
+});
+
+export const updateOrganizationSchema = z.object({
+  params: idParamSchema.shape.params,
+  body: z.object({
+    name: z.string().trim().min(2).max(120).optional(),
+    slug: z.string().trim().min(2).max(100).optional(),
+    logo: z.string().trim().max(500).optional(),
+    address: z.record(z.any()).optional(),
+    primaryContact: z.record(z.any()).optional(),
+    subscription: z.record(z.any()).optional(),
+    settings: z.record(z.any()).optional(),
+  }),
+});
+
+export const suspendOrganizationSchema = z.object({
+  params: idParamSchema.shape.params,
+  body: z.object({
+    suspended: z.boolean().optional(),
+  }),
+});
+
+export const updateUserRoleSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'User id is required'),
+  }),
+  body: z.object({
+    role: z.enum(['super_admin', 'org_admin', 'inspector', 'viewer']).optional(),
+    isActive: z.boolean().optional(),
+  }),
+});
+
+export const updateRolePermissionsSchema = z.object({
+  params: z.object({
+    role: z.enum(['super_admin', 'org_admin', 'inspector', 'viewer']),
+  }),
+  body: z.object({
+    actions: z.array(z.string()).optional(),
+  }),
+});
+
+export const updateUserPermissionsSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'User id is required'),
+  }),
+  body: z.object({
+    allowed: z.array(z.string()).optional(),
+    denied: z.array(z.string()).optional(),
+  }),
 });
