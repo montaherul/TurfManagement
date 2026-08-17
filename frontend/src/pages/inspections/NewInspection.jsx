@@ -10,6 +10,8 @@ import { Button, Select, Input, TextArea } from '../../components/ui';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { formatDate, titleCase } from '../../utils/format';
 import { getApiError } from '../../utils/api';
+import { offlineDB } from '../../utils/indexedDB';
+import { offlineQueue } from '../../utils/offlineQueue';
 
 const CLOUD_COVERS = ['clear', 'partly_cloudy', 'overcast', 'rainy'];
 const LEVELS = ['none', 'low', 'medium', 'high'];
@@ -191,6 +193,23 @@ const NewInspection = () => {
     setSaving(true);
     try {
       const payload = buildPayload(submit);
+      const isOnline = navigator.onLine;
+
+      if (!isOnline) {
+        const draft = {
+          id: editId || `draft-${Date.now()}`,
+          ...payload,
+          status: submit ? 'submitted' : 'draft',
+          createdAt: new Date().toISOString(),
+          offline: true,
+        };
+        await offlineDB.saveInspection(draft);
+        await offlineQueue.enqueue({ type: 'CREATE_INSPECTION', payload: draft });
+        toast.success('Saved offline. Will sync when you are back online.');
+        navigate('/inspections');
+        return;
+      }
+
       let inspectionId = editId;
       if (editId) {
         await dispatch(updateInspection({ id: editId, data: payload })).unwrap();

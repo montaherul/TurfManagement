@@ -19,8 +19,11 @@ import {
   Bell,
   PlusCircle,
   Calendar,
+  WifiOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { offlineQueue } from '../../utils/offlineQueue';
 
 const SidebarItem = ({ to, icon: Icon, label }) => (
   <NavLink
@@ -44,6 +47,15 @@ const Layout = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const isOnline = useOnlineStatus();
+
+  useEffect(() => {
+    if (isOnline) {
+      offlineQueue.processQueue().then((synced) => {
+        if (synced > 0) toast.success(`${synced} offline item(s) synced`);
+      });
+    }
+  }, [isOnline]);
 
   const handleLogout = async () => {
     try {
@@ -128,6 +140,12 @@ const Layout = () => {
       )}
 
       <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'lg:ml-0'}`}>
+        {!isOnline && (
+          <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2 flex items-center gap-2">
+            <WifiOff className="w-4 h-4" />
+            You are offline. Some features may be limited.
+          </div>
+        )}
         <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200">
           <div className="flex items-center justify-between h-16 px-6">
             <div className="flex items-center gap-4">
