@@ -271,7 +271,41 @@ export const createWorkOrderService = ({
     return workOrder;
   };
 
-  return { list, getById, create, update, remove, createFromInspection, generateWorkOrderCode };
+  const getCalendar = async ({ organizationId, month, year }) => {
+    const start = new Date(Number(year), Number(month), 1);
+    const end = new Date(Number(year), Number(month) + 1, 0, 23, 59, 59, 999);
+
+    const rows = await workOrderRepository.findMany({
+      where: {
+        organizationId,
+        dueDate: { gte: start, lte: end },
+      },
+      orderBy: { dueDate: 'asc' },
+      select: {
+        id: true,
+        workOrderId: true,
+        title: true,
+        status: true,
+        priority: true,
+        dueDate: true,
+        field: { select: { id: true, name: true, fieldId: true } },
+        assignee: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    return rows.map((wo) => ({
+      id: wo.id,
+      workOrderId: wo.workOrderId,
+      title: wo.title,
+      status: wo.status,
+      priority: wo.priority,
+      dueDate: wo.dueDate,
+      field: wo.field,
+      assignee: wo.assignee,
+    }));
+  };
+
+  return { list, getById, create, update, remove, createFromInspection, generateWorkOrderCode, getCalendar };
 };
 
 export default createWorkOrderService;

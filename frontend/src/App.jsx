@@ -15,6 +15,7 @@ const Inspections = lazy(() => import('./pages/inspections/Inspections'));
 const InspectionDetail = lazy(() => import('./pages/inspections/InspectionDetail'));
 const NewInspection = lazy(() => import('./pages/inspections/NewInspection'));
 const WorkOrders = lazy(() => import('./pages/workorders/WorkOrders'));
+const Calendar = lazy(() => import('./pages/workorders/Calendar'));
 const Reports = lazy(() => import('./pages/reports/Reports'));
 const Team = lazy(() => import('./pages/team/Team'));
 const AdminPanel = lazy(() => import('./pages/admin/AdminPanel'));
@@ -124,6 +125,14 @@ const App = () => {
             element={
               <RoleRoute roles={['org_admin', 'inspector', 'viewer']}>
                 <WorkOrders />
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="calendar"
+            element={
+              <RoleRoute roles={['org_admin', 'inspector', 'viewer']}>
+                <Calendar />
               </RoleRoute>
             }
           />

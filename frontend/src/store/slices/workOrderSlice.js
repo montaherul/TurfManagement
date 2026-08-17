@@ -13,6 +13,18 @@ export const getWorkOrders = createAsyncThunk(
   }
 );
 
+export const getCalendar = createAsyncThunk(
+  'workOrders/getCalendar',
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const payload = await workOrderService.getCalendar(params);
+      return payload.data || [];
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch calendar');
+    }
+  }
+);
+
 export const getWorkOrder = createAsyncThunk(
   'workOrders/getWorkOrder',
   async (id, { rejectWithValue }) => {
@@ -87,6 +99,18 @@ const workOrderSlice = createSlice({
         state.pagination = action.payload.pagination;
       })
       .addCase(getWorkOrders.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(getCalendar.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getCalendar.fulfilled, (state, action) => {
+        state.loading = false;
+        state.workOrders = action.payload;
+      })
+      .addCase(getCalendar.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

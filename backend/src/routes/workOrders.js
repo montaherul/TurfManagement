@@ -19,5 +19,6 @@ router.get('/:id', validate(getWorkOrderSchema), asyncHandler(workOrderControlle
 router.post('/', permit('workorder.create'), validate(createWorkOrderSchema), asyncHandler(workOrderController.createWorkOrder));
 router.put('/:id', permit('workorder.update'), validate(getWorkOrderSchema), validate(updateWorkOrderSchema), asyncHandler(workOrderController.updateWorkOrder));
 router.delete('/:id', permit('workorder.delete'), validate(getWorkOrderSchema), asyncHandler(workOrderController.deleteWorkOrder));
+router.get('/calendar', asyncHandler(workOrderController.getCalendar));
 
 export default router;

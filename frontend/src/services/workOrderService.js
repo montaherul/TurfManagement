@@ -11,6 +11,7 @@ export const workOrderService = {
       remove: 'deleteWorkOrder',
     },
   }),
+  getCalendar: (params) => api.get('/work-orders/calendar', { params }),
 };
 
 export default workOrderService;

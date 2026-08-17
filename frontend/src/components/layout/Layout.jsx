@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Bell,
   PlusCircle,
+  Calendar,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -61,6 +62,7 @@ const Layout = () => {
     { to: '/inspections', icon: ClipboardList, label: 'Inspections', roles: ['org_admin', 'inspector'] },
     { to: '/inspections/new', icon: PlusCircle, label: 'New Inspection', roles: ['org_admin', 'inspector'] },
     { to: '/work-orders', icon: Wrench, label: 'Work Orders', roles: ['org_admin', 'inspector', 'viewer'] },
+    { to: '/calendar', icon: Calendar, label: 'Calendar', roles: ['org_admin', 'inspector', 'viewer'] },
     { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['org_admin'] },
     { to: '/team', icon: Users, label: 'Team & Permissions', roles: ['org_admin'] },
     { to: '/admin', icon: Shield, label: 'Admin', roles: ['super_admin'] },
