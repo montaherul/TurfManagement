@@ -7,18 +7,16 @@ import { authService } from '../../services/authService';
 import {
   LayoutDashboard,
   Map,
-  ClipboardList,
-  Wrench,
-  BarChart3,
+  Calendar,
+  CalendarDays,
+  Wallet,
+  Ban,
   Settings,
-  Users,
   Shield,
   LogOut,
   Menu,
   X,
   ChevronRight,
-  PlusCircle,
-  Calendar,
   WifiOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -71,16 +69,14 @@ const Layout = () => {
   };
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: t('layout.dashboard'), roles: ['org_admin', 'inspector', 'viewer'] },
-    { to: '/fields', icon: Map, label: t('layout.fields'), roles: ['org_admin', 'inspector', 'viewer'] },
-    { to: '/inspections', icon: ClipboardList, label: t('layout.inspections'), roles: ['org_admin', 'inspector'] },
-    { to: '/inspections/new', icon: PlusCircle, label: t('layout.newInspection'), roles: ['org_admin', 'inspector'] },
-    { to: '/work-orders', icon: Wrench, label: t('layout.workOrders'), roles: ['org_admin', 'inspector', 'viewer'] },
-    { to: '/calendar', icon: Calendar, label: t('layout.calendar'), roles: ['org_admin', 'inspector', 'viewer'] },
-    { to: '/reports', icon: BarChart3, label: t('layout.reports'), roles: ['org_admin'] },
-    { to: '/team', icon: Users, label: t('layout.team'), roles: ['org_admin'] },
-    { to: '/admin', icon: Shield, label: t('layout.admin'), roles: ['super_admin'] },
-    { to: '/settings', icon: Settings, label: t('layout.settings'), roles: ['super_admin', 'org_admin', 'inspector', 'viewer'] },
+    { to: '/app', icon: LayoutDashboard, label: t('layout.dashboard'), roles: ['facility_owner', 'manager', 'operator'] },
+    { to: '/app/resources', icon: Map, label: t('layout.resources'), roles: ['facility_owner', 'manager', 'operator'] },
+    { to: '/app/slots', icon: Calendar, label: t('layout.slots'), roles: ['facility_owner', 'manager', 'operator'] },
+    { to: '/app/bookings', icon: CalendarDays, label: t('layout.bookings'), roles: ['facility_owner', 'manager', 'operator'] },
+    { to: '/app/payments', icon: Wallet, label: t('layout.payments'), roles: ['facility_owner', 'manager', 'operator'] },
+    { to: '/app/blacklist', icon: Ban, label: t('layout.blacklist'), roles: ['facility_owner', 'manager'] },
+    { to: '/app/settings', icon: Settings, label: t('layout.settings'), roles: ['facility_owner', 'manager', 'operator'] },
+    { to: '/admin', icon: Shield, label: t('layout.admin'), roles: ['platform_admin'] },
   ];
 
   const filteredNavItems = navItems.filter((item) => item.roles.includes(user?.role));
@@ -98,7 +94,7 @@ const Layout = () => {
               <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
                 <Map className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-lg text-slate-900">TurfCare BD</span>
+              <span className="font-bold text-lg text-slate-900">TurfBook</span>
             </div>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 rounded-lg hover:bg-slate-100">
               <X className="w-5 h-5" />

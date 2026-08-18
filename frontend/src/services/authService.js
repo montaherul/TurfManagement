@@ -6,8 +6,18 @@ export const authService = {
     return response.data;
   },
 
-  register: async (userData) => {
-    const response = await api.post('/auth/register', userData);
+  applyForFacility: async (application) => {
+    const response = await api.post('/auth/apply', application);
+    return response.data;
+  },
+
+  requestOtp: async (mobile, purpose = 'LOGIN') => {
+    const response = await api.post('/auth/otp/request', { mobile, purpose });
+    return response.data;
+  },
+
+  verifyOtp: async (mobile, code, purpose = 'LOGIN') => {
+    const response = await api.post('/auth/otp/verify', { mobile, purpose, code });
     return response.data;
   },
 
@@ -16,18 +26,10 @@ export const authService = {
     return response.data;
   },
 
-  refreshToken: async () => {
-    const response = await api.post('/auth/refresh');
-    return response.data;
-  },
-
   getProfile: async () => {
     const response = await api.get('/auth/me');
     return response.data;
   },
-
-  updateProfile: async (profileData) => {
-    const response = await api.patch('/auth/me', profileData);
-    return response.data;
-  },
 };
+
+export default authService;
