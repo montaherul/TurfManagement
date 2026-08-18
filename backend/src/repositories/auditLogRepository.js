@@ -5,7 +5,7 @@ import { createPaginatedRepository } from './paginatedRepository.js';
 export const auditLogListRepository = createPaginatedRepository(prisma, 'AuditLog', {
   searchableFields: ['action', 'resource'],
   filterMap: {
-    organizationId: 'organizationId',
+    facilityId: 'facilityId',
     userId: 'userId',
     action: 'action',
     resource: 'resource',
@@ -14,7 +14,7 @@ export const auditLogListRepository = createPaginatedRepository(prisma, 'AuditLo
   sortableFields: ['action', 'resource', 'createdAt'],
   select: {
     id: true,
-    organizationId: true,
+    facilityId: true,
     userId: true,
     action: true,
     resource: true,

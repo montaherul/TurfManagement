@@ -14,8 +14,8 @@ export const uploadPhoto = async (req, res) => {
     });
   }
 
-  const organizationId = req.organizationId || 'system';
-  const uploadDir = path.join(env.uploadDir, 'photos', organizationId);
+  const facilityId = req.facilityId || 'system';
+  const uploadDir = path.join(env.uploadDir, 'photos', facilityId);
   await fs.mkdir(uploadDir, { recursive: true });
 
   const ext = path.extname(req.file.originalname).toLowerCase();
@@ -29,7 +29,7 @@ export const uploadPhoto = async (req, res) => {
     .jpeg({ quality: 85 })
     .toFile(filepath);
 
-  const url = `/uploads/photos/${organizationId}/${filename}`;
+  const url = `/uploads/photos/${facilityId}/${filename}`;
 
   return successResponse(res, { url, filename }, 'Photo uploaded successfully', 201);
 };

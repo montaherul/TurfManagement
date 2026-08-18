@@ -4,8 +4,7 @@ import { createApp } from './app.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import { connectRedis } from './config/redis.js';
 import { initializeSocket } from './services/notifications/socketService.js';
-import { startBillingScheduler } from './jobs/billingScheduler.js';
-import { startReportScheduler } from './jobs/reportScheduler.js';
+import { startSlotScheduler } from './jobs/slotScheduler.js';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 
@@ -43,9 +42,8 @@ const bootstrap = async () => {
   initializeSocket(io);
 
   server.listen(env.port, () => {
-    logger.info(`TurfCare BD API running in ${env.nodeEnv} mode on port ${env.port}`);
-    startBillingScheduler();
-    startReportScheduler();
+    logger.info(`TurfBook API running in ${env.nodeEnv} mode on port ${env.port}`);
+    startSlotScheduler();
   });
 
   return app;

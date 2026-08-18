@@ -6,7 +6,7 @@ describe('paginatedRepository — offset math', () => {
     const calls = [];
     const prismaMock = {
       $transaction: async (ops) => Promise.all(ops),
-      Field: {
+      Resource: {
         findMany: async (args) => {
           calls.push(args);
           return [{ id: 'f1' }];
@@ -14,7 +14,7 @@ describe('paginatedRepository — offset math', () => {
         count: async () => 42,
       },
     };
-    const repo = createPaginatedRepository(prismaMock, 'Field', {
+    const repo = createPaginatedRepository(prismaMock, 'Resource', {
       searchableFields: ['name'],
       filterMap: { status: 'status' },
       sortableFields: ['name', 'createdAt'],
@@ -115,11 +115,11 @@ describe('buildPagination / buildPaginationResponse — API envelope contract', 
   it('produces the exact envelope the frontend consumes', () => {
     const result = buildPaginationResponse(
       { data: [{ id: '1' }], pagination: buildPagination(1, 42, 1, 10) },
-      'Fields retrieved successfully'
+      'Resources retrieved successfully'
     );
     expect(result).toEqual({
       success: true,
-      message: 'Fields retrieved successfully',
+      message: 'Resources retrieved successfully',
       data: [{ id: '1' }],
       pagination: { page: 1, limit: 10, total: 42, totalPages: 5, hasNext: true, hasPrev: false },
     });

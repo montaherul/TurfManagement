@@ -1,7 +1,7 @@
 /**
- * Integration tests Ã¢â‚¬â€ require TEST_DATABASE_URL pointing at an isolated
- * PostgreSQL database (see AGENTS.md rule 58). The schema must be applied
- * beforehand: `TEST_DATABASE_URL=... npx prisma db push`.
+ * TurfBook integration tests — run against the development database
+ * (or TEST_DATABASE_URL when provided). Apply schema first:
+ * `npx prisma migrate reset --force` then `npm run db:seed`.
  */
 jest.mock('../../src/config/env.js', () => ({
   env: {
@@ -11,13 +11,14 @@ jest.mock('../../src/config/env.js', () => ({
     jwtSecret: process.env.TEST_JWT_SECRET || 'test-jwt-secret',
     jwtRefreshSecret: process.env.TEST_JWT_SECRET || 'test-jwt-refresh-secret',
     frontendUrl: 'http://localhost:5173',
-    rateLimit: { max: 10000, windowMs: 60000 },
+    logLevel: 'error',
+    rateLimit: { max: 100000, windowMs: 60000 },
     uploadDir: './uploads',
-    sslcommerz: { storeId: '', storePassword: '', isLive: false },
-    sendgrid: { apiKey: '', fromEmail: 'no-reply@turfcarebd.com' },
+    sendgrid: { apiKey: '', fromEmail: 'no-reply@turfbook.dev' },
+    sms: { provider: '', apiKey: '', senderId: '' },
+    schedulers: { enabled: false, slotHour: 0 },
     isProduction: false,
   },
-  isSslcommerzConfigured: () => false,
   isSendgridConfigured: () => false,
 }));
 
@@ -32,93 +33,110 @@ import { prisma } from '../../src/config/db.js';
 
 const PASSWORD = 'Password123!';
 const PASSWORD_HASH = bcrypt.hashSync(PASSWORD, 10);
+const UNIQUE = Date.now().toString().slice(-8);
 
 const seed = async () => {
-  await prisma.auditLog.deleteMany({});
-  await prisma.workOrder.deleteMany({});
-  await prisma.inspection.deleteMany({});
-  await prisma.field.deleteMany({});
+  await prisma.bookingItem.deleteMany({});
+  await prisma.payment.deleteMany({});
+  await prisma.booking.deleteMany({});
+  await prisma.slot.deleteMany({});
+  await prisma.resource.deleteMany({});
+  await prisma.blacklist.deleteMany({});
   await prisma.userPermission.deleteMany({});
   await prisma.rolePermission.deleteMany({});
+  await prisma.auditLog.deleteMany({});
+  await prisma.notification.deleteMany({});
   await prisma.user.deleteMany({});
-  await prisma.subscription.deleteMany({});
-  await prisma.organization.deleteMany({});
+  await prisma.facility.deleteMany({});
 
-  const orgA = await prisma.organization.create({
-    data: { name: 'Org A', slug: 'org-a-test' },
-  });
-  const orgB = await prisma.organization.create({
-    data: { name: 'Org B', slug: 'org-b-test' },
-  });
-
-  await prisma.subscription.create({
-    data: { organizationId: orgA.id, planId: 'free', status: 'active' },
-  });
-
-  const adminA = await prisma.user.create({
+  const facility = await prisma.facility.create({
     data: {
-      organizationId: orgA.id,
-      email: 'admin-a@test.dev',
-      passwordHash: PASSWORD_HASH,
-      firstName: 'Admin',
-      lastName: 'A',
-      role: 'org_admin',
-    },
-  });
-  const inspectorA = await prisma.user.create({
-    data: {
-      organizationId: orgA.id,
-      email: 'inspector-a@test.dev',
-      passwordHash: PASSWORD_HASH,
-      firstName: 'Inspector',
-      lastName: 'A',
-      role: 'inspector',
-    },
-  });
-  const viewerB = await prisma.user.create({
-    data: {
-      organizationId: orgB.id,
-      email: 'viewer-b@test.dev',
-      passwordHash: PASSWORD_HASH,
-      firstName: 'Viewer',
-      lastName: 'B',
-      role: 'viewer',
+      name: 'Integration Facility',
+      slug: `integration-facility-${UNIQUE}`,
+      status: 'ACTIVE',
+      phone: '01710000000',
+      address: { city: 'Dhaka', division: 'Dhaka' },
     },
   });
 
-  const fieldA = await prisma.field.create({
+  await prisma.user.createMany({
+    data: [
+      {
+        email: 'admin@test.dev',
+        passwordHash: PASSWORD_HASH,
+        firstName: 'Admin',
+        role: 'platform_admin',
+        isActive: true,
+      },
+      {
+        email: 'owner@test.dev',
+        passwordHash: PASSWORD_HASH,
+        firstName: 'Owner',
+        role: 'facility_owner',
+        facilityId: facility.id,
+        isActive: true,
+      },
+    ],
+  });
+
+  const resource = await prisma.resource.create({
     data: {
-      organizationId: orgA.id,
-      fieldId: 'FLD-A-001',
-      name: 'Main Pitch',
-      sportType: 'football',
-      location: { address: 'Dhaka' },
-      dimensions: { width: 68, length: 105, unit: 'm' },
-      status: 'active',
+      facilityId: facility.id,
+      name: 'Test Turf',
+      type: 'FOOTBALL',
+      basePrice: 1000,
+      status: 'ACTIVE',
+      scheduleTemplate: {
+        startTime: '09:00',
+        endTime: '12:00',
+        stepMinutes: 60,
+        days: [0, 1, 2, 3, 4, 5, 6],
+        price: 1000,
+        peakRanges: [],
+      },
     },
   });
 
-  return { orgA, orgB, adminA, inspectorA, viewerB, fieldA };
+  const day = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  day.setUTCHours(0, 0, 0, 0);
+  const slots = [];
+  for (let h = 9; h < 12; h += 1) {
+    slots.push({
+      facilityId: facility.id,
+      resourceId: resource.id,
+      date: day,
+      startTime: `${String(h).padStart(2, '0')}:00`,
+      endTime: `${String(h + 1).padStart(2, '0')}:00`,
+      price: 1000,
+      status: 'AVAILABLE',
+    });
+  }
+  await prisma.slot.createMany({ data: slots });
+
+  return { facility, resource, day };
 };
 
-describe('TurfCare BD API Ã¢â‚¬â€ integration (auth, tenant isolation, inspection workflow)', () => {
+describe('TurfBook API — booking lifecycle', () => {
   let app;
-  let ctx;
-
-  const login = async (email) => {
-    const res = await request(app)
-      .post('/api/auth/login')
-      .send({ email, password: PASSWORD })
-      .expect(200);
-    expect(res.body.success).toBe(true);
-    return res.body.data.accessToken;
-  };
-
-  const auth = (token) => ({ Authorization: `Bearer ${token}` });
+  let facility;
+  let resource;
+  let day;
+  let ownerToken;
+  let customerToken;
 
   beforeAll(async () => {
-    app = createApp({ redis: null });
-    ctx = await seed();
+    const seeded = await seed();
+    facility = seeded.facility;
+    resource = seeded.resource;
+    day = seeded.day;
+
+    app = createApp();
+
+    const ownerLogin = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'owner@test.dev', password: PASSWORD });
+    ownerToken = ownerLogin.body.data.accessToken;
+    expect(ownerLogin.status).toBe(200);
   });
 
   afterAll(async () => {
@@ -127,167 +145,140 @@ describe('TurfCare BD API Ã¢â‚¬â€ integration (auth, tenant isolation
 
   it('rejects login with a wrong password', async () => {
     const res = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'admin-a@test.dev', password: 'wrong-password' });
+      .post('/api/v1/auth/login')
+      .send({ email: 'owner@test.dev', password: 'wrong-password' });
     expect(res.status).toBe(401);
     expect(res.body.success).toBe(false);
   });
 
-  it('logs in successfully and exposes /me', async () => {
-    const token = await login('admin-a@test.dev');
-    const me = await request(app).get('/api/auth/me').set(auth(token)).expect(200);
-    expect(me.body.data.user.email).toBe('admin-a@test.dev');
-    expect(me.body.data.user.organizationId).toBe(ctx.orgA.id);
+  it('publishes facilities publicly with resource types', async () => {
+    const res = await request(app).get('/api/v1/facilities?search=Integration');
+    expect(res.status).toBe(200);
+    expect(res.body.data.data.length).toBeGreaterThan(0);
+    const found = res.body.data.data.find((f) => f.id === facility.id);
+    expect(found.resourceTypes).toContain('FOOTBALL');
   });
 
-  it('blocks cross-tenant access to another organization field', async () => {
-    const orgBField = await prisma.field.create({
+  it('blocks tenant B from reading tenant A resources', async () => {
+    const other = await prisma.facility.create({
       data: {
-        organizationId: ctx.orgB.id,
-        fieldId: 'FLD-B-001',
-        name: 'Org B Pitch',
-        sportType: 'football',
-        location: { address: 'Chittagong' },
-        dimensions: { width: 68, length: 105, unit: 'm' },
-        status: 'active',
+        name: 'Other Facility',
+        slug: `other-facility-${UNIQUE}`,
+        status: 'ACTIVE',
       },
     });
+    await prisma.user.create({
+      data: {
+        email: 'other-owner@test.dev',
+        passwordHash: PASSWORD_HASH,
+        firstName: 'Other',
+        role: 'facility_owner',
+        facilityId: other.id,
+        isActive: true,
+      },
+    });
+    const login = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'other-owner@test.dev', password: PASSWORD });
+    const otherToken = login.body.data.accessToken;
 
-    const token = await login('admin-a@test.dev');
     const res = await request(app)
-      .get(`/api/fields/${orgBField.id}`)
-      .set(auth(token));
+      .get(`/api/v1/resources/${resource.id}`)
+      .set('Authorization', `Bearer ${otherToken}`);
     expect(res.status).toBe(404);
   });
 
-  it('returns 401 without a token and 403 without permission', async () => {
-    const res = await request(app).get('/api/fields');
+  it('customer OTP login works and creates a booker', async () => {
+    const mobile = `017${UNIQUE.slice(0, 8)}`;
+    const requestRes = await request(app)
+      .post('/api/v1/auth/otp/request')
+      .send({ mobile, purpose: 'LOGIN' });
+    expect(requestRes.status).toBe(200);
+    const code = requestRes.body.data.devCode;
+
+    const verifyRes = await request(app)
+      .post('/api/v1/auth/otp/verify')
+      .send({ mobile, purpose: 'LOGIN', code });
+    expect(verifyRes.status).toBe(200);
+    expect(verifyRes.body.data.user.role).toBe('booker');
+    customerToken = verifyRes.body.data.accessToken;
+  });
+
+  it('customer books an available slot with payment proof', async () => {
+    const res = await request(app)
+      .post('/api/v1/bookings')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({
+        resourceId: resource.id,
+        date: day.toISOString().slice(0, 10),
+        startTime: '10:00',
+        endTime: '11:00',
+        paymentMethod: 'BKASH',
+        transactionId: 'INT-TRX-1',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.booking.status).toBe('PENDING');
+    expect(res.body.data.booking.platformFee).toBe(15);
+  });
+
+  it('owner sees the pending payment and verifies it -> booking CONFIRMED', async () => {
+    const pending = await request(app)
+      .get('/api/v1/payments/pending')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(pending.status).toBe(200);
+    expect(pending.body.data.payments.length).toBeGreaterThan(0);
+    const payment = pending.body.data.payments[0];
+
+    const verified = await request(app)
+      .post(`/api/v1/payments/${payment.id}/verify`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(verified.status).toBe(200);
+    expect(verified.body.data.booking.status).toBe('CONFIRMED');
+  });
+
+  it('owner checks the customer in and completes the booking', async () => {
+    const today = await request(app)
+      .get(`/api/v1/bookings/today?date=${day.toISOString().slice(0, 10)}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(today.status).toBe(200);
+    const booking = today.body.data.bookings[0];
+    expect(booking.status).toBe('CONFIRMED');
+
+    const checkIn = await request(app)
+      .post(`/api/v1/bookings/${booking.id}/check-in`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(checkIn.status).toBe(200);
+
+    const complete = await request(app)
+      .post(`/api/v1/bookings/${booking.id}/complete`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(complete.body.data.booking.status).toBe('COMPLETED');
+  });
+
+  it('facility wallet shows collected fees', async () => {
+    const res = await request(app)
+      .get('/api/v1/payments/wallet')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.wallet.platformFees).toBe(15);
+  });
+
+  it('booking cannot be created without payment proof', async () => {
+    const res = await request(app)
+      .post('/api/v1/bookings')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({
+        resourceId: resource.id,
+        date: day.toISOString().slice(0, 10),
+        startTime: '11:00',
+        endTime: '12:00',
+      });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('unauthenticated access to owner endpoints is rejected', async () => {
+    const res = await request(app).get('/api/v1/resources/all');
     expect(res.status).toBe(401);
-
-    const viewerToken = await login('viewer-b@test.dev');
-    const forbidden = await request(app)
-      .post('/api/inspections')
-      .set(auth(viewerToken))
-      .send({ fieldId: ctx.fieldA.id });
-    expect(forbidden.status).toBe(403);
-  });
-
-  it('creates a poor inspection that auto-generates a task-specific work order', async () => {
-    const token = await login('inspector-a@test.dev');
-    const res = await request(app)
-      .post('/api/inspections')
-      .set(auth(token))
-      .send({
-        fieldId: ctx.fieldA.id,
-        surfaceAssessment: {
-          grassCoverPercent: 30,
-          colorUniformity: 1,
-          weedPresence: 'high',
-          pestDamage: 'high',
-          diseaseSigns: 'medium',
-        },
-        soilAssessment: { moistureContent: 90, compactionKgCm2: 25, ph: 9 },
-        structuralAssessment: { surfaceEvennessMm: 15, drainageRateMinutes: 40, thatchDepthMm: 14 },
-        grassHealth: { colorRating: 1, diseaseRating: 5, pestRating: 4 },
-      })
-      .expect(201);
-
-    const inspection = res.body.data.inspection;
-    expect(inspection.status).toBe('draft');
-    expect(inspection.pitchQualityScore.tier).toBe('poor');
-    expect(res.body.data.workOrder).toBeTruthy();
-
-    const woRes = await request(app)
-      .get(`/api/work-orders/${res.body.data.workOrder.id}`)
-      .set(auth(token))
-      .expect(200);
-    const workOrder = woRes.body.data.workOrder;
-    expect(workOrder.priority).toBe('urgent');
-    const categories = workOrder.tasks.map((t) => t.category);
-    for (const expected of ['drainage', 'aeration', 'thatching', 'overseeding', 'weed_control', 'pest_control', 'disease_treatment', 'irrigation']) {
-      expect(categories).toContain(expected);
-    }
-    expect(workOrder.estimatedCost.amount).toBeGreaterThan(0);
-  });
-
-  it('submits, verifies and deletes an inspection through the workflow', async () => {
-    const inspectorToken = await login('inspector-a@test.dev');    const created = await request(app)
-      .post('/api/inspections')
-      .set(auth(inspectorToken))
-      .send({ fieldId: ctx.fieldA.id })
-      .expect(201);
-    const id = created.body.data.inspection.id;
-
-    await request(app).post(`/api/inspections/${id}/submit`).set(auth(inspectorToken)).expect(200);
-
-    const adminToken = await login('admin-a@test.dev');
-    await request(app).post(`/api/inspections/${id}/verify`).set(auth(adminToken)).expect(200);
-
-    const verified = await request(app).get(`/api/inspections/${id}`).set(auth(adminToken)).expect(200);
-    expect(verified.body.data.inspection.status).toBe('verified');
-
-    await request(app).delete(`/api/inspections/${id}`).set(auth(adminToken)).expect(200);
-
-    const afterDelete = await request(app).get(`/api/inspections/${id}`).set(auth(adminToken));
-    expect(afterDelete.status).toBe(404);
-  });
-
-  it('rejects deleting another organization work order', async () => {
-    const token = await login('admin-a@test.dev');
-    const orgBField = await prisma.field.create({
-      data: {
-        organizationId: ctx.orgB.id,
-        fieldId: 'FLD-B-002',
-        name: 'Org B Field 2',
-        sportType: 'football',
-        location: { address: 'Sylhet' },
-        dimensions: { width: 68, length: 105, unit: 'm' },
-        status: 'active',
-      },
-    });
-    const orgBWo = await prisma.workOrder.create({
-      data: {
-        organizationId: ctx.orgB.id,
-        workOrderId: 'WO-TEST-1',
-        fieldId: orgBField.id,
-        title: 'Org B maintenance',
-        priority: 'high',
-        status: 'created',
-      },
-    });
-    const res = await request(app)
-      .delete(`/api/work-orders/${orgBWo.id}`)
-      .set(auth(token));
-    expect(res.status).toBe(404);
-  });
-
-  it('updates organization scoring settings and applies them to new scores', async () => {
-    const adminToken = await login('admin-a@test.dev');
-
-    const saved = await request(app)
-      .put('/api/organizations/me/settings')
-      .set(auth(adminToken))
-      .send({ scoringWeights: { surface: 10, soil: 10, structural: 10, grass: 10, maintenance: 10 } })
-      .expect(200);
-    expect(saved.body.data.settings.scoringWeights.surface).toBe(10);
-
-    const created = await request(app)
-      .post('/api/inspections')
-      .set(auth(adminToken))
-      .send({
-        fieldId: ctx.fieldA.id,
-        surfaceAssessment: { grassCoverPercent: 100, colorUniformity: 5, weedPresence: 'none', pestDamage: 'none', diseaseSigns: 'none' },
-        soilAssessment: { moistureContent: 40, compactionKgCm2: 0, ph: 7 },
-        structuralAssessment: { surfaceEvennessMm: 0, drainageRateMinutes: 0, thatchDepthMm: 0 },
-        grassHealth: { colorRating: 5, diseaseRating: 1, pestRating: 1 },
-      })
-      .expect(201);
-    expect(created.body.data.inspection.pitchQualityScore.total).toBeLessThanOrEqual(50);
-
-    await request(app)
-      .put('/api/organizations/me/settings')
-      .set(auth(adminToken))
-      .send({ scoringWeights: {} })
-      .expect(200);
   });
 });

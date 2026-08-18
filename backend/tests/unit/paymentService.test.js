@@ -1,167 +1,123 @@
-jest.mock('../../src/config/env.js', () => ({
-  env: {
-    nodeEnv: 'test',
-    port: 0,
-    databaseUrl: 'postgresql://localhost:5432/test',
-    redisUrl: 'redis://localhost:6379',
-    jwtSecret: 'test-secret',
-    jwtRefreshSecret: 'test-refresh-secret',
-    frontendUrl: 'http://localhost:5173',
-    rateLimit: { max: 1000, windowMs: 60000 },
-    uploadDir: './uploads',
-    sslcommerz: { storeId: 'test-store', storePassword: 'test-pass', isLive: false },
-    sendgrid: { apiKey: '', fromEmail: 'no-reply@test.com' },
-    isProduction: false,
-  },
-  isSslcommerzConfigured: () => true,
-  isSendgridConfigured: () => false,
-}));
-
 import { createPaymentService } from '../../src/services/paymentService.js';
 
-const makeService = (overrides = {}) => {
-  const payments = [];
+const makePayment = (overrides = {}) => ({
+  id: 'pay-1',
+  facilityId: 'fac-1',
+  bookingId: 'bk-1',
+  paymentNo: 'PAY-000001',
+  customerId: 'cust-1',
+  amount: 1500,
+  method: 'BKASH',
+  tranId: 'TRX-1',
+  status: 'PENDING',
+  platformFee: 15,
+  verifiedBy: null,
+  verifiedAt: null,
+  note: null,
+  ...overrides,
+});
+
+const makeBooking = (overrides = {}) => ({
+  id: 'bk-1',
+  facilityId: 'fac-1',
+  bookingNo: 'BK-000001',
+  customerId: 'cust-1',
+  resourceId: 'res-1',
+  date: new Date('2026-08-20T00:00:00.000Z'),
+  startTime: '10:00',
+  endTime: '11:00',
+  totalAmount: 1500,
+  status: 'PENDING',
+  ...overrides,
+});
+
+const makeService = () => {
+  const state = { payments: [], bookings: [] };
+
   const paymentRepository = {
-    findByTranId: async (tranId) => payments.find((p) => p.tranId === tranId) || null,
-    upsertByTranId: async (tranId, data) => {
-      const existing = payments.find((p) => p.tranId === tranId);
-      if (existing) {
-        Object.assign(existing, data);
-        return { payment: existing, created: false };
-      }
-      const payment = { ...data, tranId, createdAt: new Date() };
-      payments.push(payment);
-      return { payment, created: true };
+    findFirst: async (where) => state.payments.find((p) => p.id === where.id && (!where.facilityId || p.facilityId === where.facilityId)) || null,
+    update: async (id, data) => {
+      const payment = state.payments.find((p) => p.id === id);
+      Object.assign(payment, data);
+      return payment;
     },
-    countForYear: async (year) => payments.filter((p) => new Date(p.createdAt).getFullYear() === Number(year)).length,
-    ...overrides,
+    pendingByFacility: async (facilityId) => state.payments.filter((p) => p.facilityId === facilityId && p.status === 'PENDING'),
+    walletSummary: async () => ({ totalCollected: 1500, platformFees: 15, verifiedPayments: 1, pendingVerifications: 0, outstandingDues: 0 }),
   };
-  const organizationRepository = {
-    findById: async (id) => ({ id, name: 'Test Org', settings: {} }),
-    ...overrides,
+
+  const bookingRepository = {
+    update: async (id, data) => {
+      const booking = state.bookings.find((b) => b.id === id);
+      Object.assign(booking, data);
+      return booking;
+    },
+    findById: async (id) => state.bookings.find((b) => b.id === id) || null,
+    bookingItemsByBookingId: async () => [{ id: 'bi-1', slotId: 'slot-1' }],
+    deleteBookingItems: async () => {},
   };
-  const auditLogRepository = { create: async () => {} };
-  const notificationService = { notifyOrganization: async () => {} };
-  const logger = { error: jest.fn(), info: jest.fn(), warn: jest.fn() };
+
+  const notifications = [];
+  const notificationService = {
+    notifyUser: async (userId, event, payload) => notifications.push({ userId, event, payload }),
+    notifyFacility: async () => {},
+  };
+
+  const audits = [];
+  const auditLogRepository = { create: async (entry) => audits.push(entry) };
 
   const service = createPaymentService({
     paymentRepository,
-    organizationRepository,
-    auditLogRepository,
+    paymentListRepository: { list: async () => ({ data: [], pagination: {} }) },
+    bookingRepository,
     notificationService,
-    logger,
+    auditLogRepository,
   });
 
-  return { service, paymentRepository, payments };
+  return { service, state, notifications, audits };
 };
 
 describe('createPaymentService', () => {
-  describe('recordPaidPayment', () => {
-    it('creates a new paid payment record with an invoice number', async () => {
-      const { service, paymentRepository } = makeService();
-      jest.spyOn(paymentRepository, 'countForYear').mockResolvedValue(0);
-
-      const result = await service.recordPaidPayment({
-        organizationId: 'org-1',
-        tranId: 'TXN-1',
-        planId: 'basic',
-        amountBDT: 2500,
-        billToName: 'Acme',
-        billToEmail: 'acme@example.com',
-      });
-
-      expect(result.created).toBe(true);
-      expect(result.payment.status).toBe('paid');
-      expect(result.payment.invoiceNo).toMatch(/^INV-\d{4}-\d{5}$/);
-      expect(result.payment.planName).toBe('Basic');
-      expect(result.payment.billToName).toBe('Acme');
+  describe('verify', () => {
+    it('verifies PENDING payment and confirms the booking', async () => {
+      const { service, state } = makeService();
+      state.payments.push(makePayment());
+      state.bookings.push(makeBooking());
+      const result = await service.verify({ facilityId: 'fac-1', id: 'pay-1', verifierId: 'staff-1' });
+      expect(result.payment.status).toBe('VERIFIED');
+      expect(result.payment.verifiedBy).toBe('staff-1');
+      expect(result.payment.platformFee).toBe(15);
+      expect(result.booking.status).toBe('CONFIRMED');
     });
 
-    it('updates an existing payment instead of duplicating', async () => {
-      const { service, paymentRepository } = makeService();
-      jest.spyOn(paymentRepository, 'countForYear').mockResolvedValue(0);
+    it('rejects already-verified payments', async () => {
+      const { service, state } = makeService();
+      state.payments.push(makePayment({ status: 'VERIFIED' }));
+      await expect(service.verify({ facilityId: 'fac-1', id: 'pay-1', verifierId: 'staff-1' })).rejects.toMatchObject({ statusCode: 422, code: 'INVALID_STATUS' });
+    });
 
-      await service.recordPaidPayment({
-        organizationId: 'org-1',
-        tranId: 'TXN-2',
-        planId: 'basic',
-        amountBDT: 2500,
-      });
-
-      const result = await service.recordPaidPayment({
-        organizationId: 'org-1',
-        tranId: 'TXN-2',
-        planId: 'professional',
-        amountBDT: 8000,
-      });
-
-      expect(result.created).toBe(false);
-      expect(result.payment.planId).toBe('professional');
-      expect(result.payment.amountBDT).toBe(8000);
+    it('returns 404 when the payment is outside the facility', async () => {
+      const { service, state } = makeService();
+      state.payments.push(makePayment());
+      await expect(service.verify({ facilityId: 'fac-OTHER', id: 'pay-1', verifierId: 'staff-1' })).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
     });
   });
 
-  describe('nextInvoiceNo', () => {
-    it('generates sequential invoice numbers per year', async () => {
-      const { service, paymentRepository } = makeService();
-      jest.spyOn(paymentRepository, 'countForYear').mockResolvedValue(2);
-
-      const invoiceNo = await service.nextInvoiceNo();
-      expect(invoiceNo).toMatch(/^INV-\d{4}-00003$/);
-    });
-  });
-
-  describe('getInvoiceByTranId', () => {
-    it('returns an existing invoice when it belongs to the org', async () => {
-      const { service } = makeService();
-      await service.recordPaidPayment({
-        organizationId: 'org-1',
-        tranId: 'TXN-10',
-        planId: 'basic',
-        amountBDT: 2500,
-      });
-
-      const result = await service.getInvoiceByTranId('TXN-10', 'org-1');
-      expect(result.tranId).toBe('TXN-10');
-      expect(result.organizationId).toBe('org-1');
+  describe('reject', () => {
+    it('rejects PENDING payment, cancels the booking and frees items', async () => {
+      const { service, state, notifications } = makeService();
+      state.payments.push(makePayment());
+      state.bookings.push(makeBooking());
+      const result = await service.reject({ facilityId: 'fac-1', id: 'pay-1', verifierId: 'staff-1', reason: 'TXN ID mismatch' });
+      expect(result.payment.status).toBe('REJECTED');
+      expect(result.booking.status).toBe('CANCELLED');
+      expect(result.booking.cancelReason).toBe('TXN ID mismatch');
+      expect(notifications.some((n) => n.event === 'payment:rejected')).toBe(true);
     });
 
-    it('throws INVOICE_NOT_FOUND for cross-tenant access', async () => {
-      const { service } = makeService();
-      await service.recordPaidPayment({
-        organizationId: 'org-1',
-        tranId: 'TXN-11',
-        planId: 'basic',
-        amountBDT: 2500,
-      });
-
-      await expect(service.getInvoiceByTranId('TXN-11', 'org-2')).rejects.toMatchObject({
-        statusCode: 404,
-        code: 'INVOICE_NOT_FOUND',
-      });
-    });
-  });
-
-  describe('getInvoiceForPdf', () => {
-    it('returns invoice and organization data', async () => {
-      const { service } = makeService();
-      await service.recordPaidPayment({
-        organizationId: 'org-1',
-        tranId: 'TXN-20',
-        planId: 'basic',
-        amountBDT: 2500,
-      });
-
-      const result = await service.getInvoiceForPdf('TXN-20', 'org-1');
-      expect(result.invoice.tranId).toBe('TXN-20');
-      expect(result.organization.name).toBe('Test Org');
-    });
-  });
-
-  describe('getInvoicePdf', () => {
-    it('is exported from the service', async () => {
-      const { service } = makeService();
-      expect(typeof service.getInvoicePdf).toBe('function');
+    it('refuses to reject a non-pending payment', async () => {
+      const { service, state } = makeService();
+      state.payments.push(makePayment({ status: 'REFUNDED' }));
+      await expect(service.reject({ facilityId: 'fac-1', id: 'pay-1', verifierId: 'staff-1' })).rejects.toMatchObject({ statusCode: 422, code: 'INVALID_STATUS' });
     });
   });
 });

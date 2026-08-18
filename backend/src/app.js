@@ -4,7 +4,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
-import mongoSanitize from 'express-mongo-sanitize';
 import hpp from 'hpp';
 import { env } from './config/env.js';
 import { authMiddleware } from './middleware/auth.js';
@@ -12,16 +11,14 @@ import { tenantMiddleware } from './middleware/tenant.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 import authRoutes from './routes/auth.js';
+import facilityRoutes from './routes/facilities.js';
+import resourceRoutes from './routes/resources.js';
+import slotRoutes from './routes/slots.js';
+import bookingRoutes from './routes/bookings.js';
 import paymentRoutes from './routes/payments.js';
-import notificationRoutes from './routes/notifications.js';
-import organizationRoutes from './routes/organizations.js';
-import fieldRoutes from './routes/fields.js';
-import inspectionRoutes from './routes/inspections.js';
-import workOrderRoutes from './routes/workOrders.js';
-import subscriptionRoutes from './routes/subscriptions.js';
-import reportRoutes from './routes/reports.js';
-import reportScheduleRoutes from './routes/reportsSchedules.js';
+import blacklistRoutes from './routes/blacklist.js';
 import adminRoutes from './routes/admin.js';
+import notificationRoutes from './routes/notifications.js';
 import uploadRoutes from './routes/upload.js';
 import permissionRoutes from './routes/permissions.js';
 
@@ -46,7 +43,6 @@ export const createApp = ({ redis = null } = {}) => {
       credentials: true,
     })
   );
-  app.use(mongoSanitize());
   app.use(hpp());
 
   app.locals.redis = redis;
@@ -60,24 +56,22 @@ export const createApp = ({ redis = null } = {}) => {
 
   app.use('/uploads', express.static(env.uploadDir));
 
-  app.use('/api/auth', authRoutes);
-  app.use('/api/payments', paymentRoutes);
-  app.use('/api/notifications', authMiddleware, notificationRoutes);
-  app.use('/api/organizations', authMiddleware, tenantMiddleware, organizationRoutes);
-  app.use('/api/fields', authMiddleware, tenantMiddleware, fieldRoutes);
-  app.use('/api/inspections', authMiddleware, tenantMiddleware, inspectionRoutes);
-  app.use('/api/work-orders', authMiddleware, tenantMiddleware, workOrderRoutes);
-  app.use('/api/subscriptions', authMiddleware, tenantMiddleware, subscriptionRoutes);
-  app.use('/api/reports/schedules', authMiddleware, tenantMiddleware, reportScheduleRoutes);
-  app.use('/api/reports', authMiddleware, tenantMiddleware, reportRoutes);
-  app.use('/api/upload', authMiddleware, tenantMiddleware, uploadRoutes);
-  app.use('/api/admin', authMiddleware, adminRoutes);
-  app.use('/api/permissions', authMiddleware, tenantMiddleware, permissionRoutes);
+  app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1/facilities', facilityRoutes);
+  app.use('/api/v1/resources', authMiddleware, tenantMiddleware, resourceRoutes);
+  app.use('/api/v1/slots', slotRoutes);
+  app.use('/api/v1/bookings', bookingRoutes);
+  app.use('/api/v1/payments', paymentRoutes);
+  app.use('/api/v1/blacklist', blacklistRoutes);
+  app.use('/api/v1/admin', authMiddleware, adminRoutes);
+  app.use('/api/v1/notifications', authMiddleware, notificationRoutes);
+  app.use('/api/v1/upload', authMiddleware, tenantMiddleware, uploadRoutes);
+  app.use('/api/v1/permissions', authMiddleware, tenantMiddleware, permissionRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({
       success: true,
-      message: 'TurfCare BD API is healthy',
+      message: 'TurfBook API is healthy',
       timestamp: new Date().toISOString(),
       environment: env.nodeEnv,
       uptime: process.uptime(),

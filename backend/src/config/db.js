@@ -4,18 +4,28 @@ import { logger } from '../utils/logger.js';
 
 /**
  * Request-scoped tenant context. The tenantMiddleware runs handlers inside
- * tenantContext.run({ organizationId }, ...) so the Prisma client extension can
- * automatically scope every query to the current organization (defense in depth).
+ * tenantContext.run({ facilityId }, ...) so the Prisma client extension can
+ * automatically scope every query to the current facility (defense in depth).
  */
 export const tenantContext = new AsyncLocalStorage();
 
 const TENANT_MODELS = new Set([
   'User',
-  'Field',
-  'Inspection',
-  'WorkOrder',
-  'Subscription',
+  'Resource',
+  'Slot',
+  'Booking',
+  'Payment',
+  'Package',
+  'PackagePurchase',
+  'Tournament',
+  'TournamentTeam',
+  'TournamentMatch',
+  'Expense',
+  'Blacklist',
+  'Maintenance',
   'AuditLog',
+  'Notification',
+  'ScheduledReport',
 ]);
 
 const notFoundError = () =>
@@ -24,12 +34,12 @@ const notFoundError = () =>
     clientVersion: '6',
   });
 
-const getContextOrgId = () => tenantContext.getStore()?.organizationId;
+const getContextFacilityId = () => tenantContext.getStore()?.facilityId;
 
-const injectOrg = (args, orgId) => {
+const injectFacility = (args, facilityId) => {
   args.where = args.where
-    ? { AND: [args.where, { organizationId: orgId }] }
-    : { organizationId: orgId };
+    ? { AND: [args.where, { facilityId }] }
+    : { facilityId };
 };
 
 const baseClient = new PrismaClient({
@@ -40,49 +50,49 @@ export const prisma = baseClient.$extends({
   query: {
     $allModels: {
       async findMany({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) injectOrg(args, orgId);
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) injectFacility(args, facilityId);
         return query(args);
       },
       async findFirst({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) injectOrg(args, orgId);
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) injectFacility(args, facilityId);
         return query(args);
       },
       async count({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) injectOrg(args, orgId);
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) injectFacility(args, facilityId);
         return query(args);
       },
       async updateMany({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) injectOrg(args, orgId);
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) injectFacility(args, facilityId);
         return query(args);
       },
       async deleteMany({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) injectOrg(args, orgId);
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) injectFacility(args, facilityId);
         return query(args);
       },
       async aggregate({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) injectOrg(args, orgId);
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) injectFacility(args, facilityId);
         return query(args);
       },
       async groupBy({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) {
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) {
           args.where = args.where
-            ? { AND: [args.where, { organizationId: orgId }] }
-            : { organizationId: orgId };
+            ? { AND: [args.where, { facilityId }] }
+            : { facilityId };
         }
         return query(args);
       },
       async update({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) {
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) {
           const owned = await baseClient[model].findFirst({
-            where: { AND: [args.where, { organizationId: orgId }] },
+            where: { AND: [args.where, { facilityId }] },
             select: { id: true },
           });
           if (!owned) throw notFoundError();
@@ -90,10 +100,10 @@ export const prisma = baseClient.$extends({
         return query(args);
       },
       async delete({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) {
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) {
           const owned = await baseClient[model].findFirst({
-            where: { AND: [args.where, { organizationId: orgId }] },
+            where: { AND: [args.where, { facilityId }] },
             select: { id: true },
           });
           if (!owned) throw notFoundError();
@@ -101,10 +111,10 @@ export const prisma = baseClient.$extends({
         return query(args);
       },
       async upsert({ model, args, query }) {
-        const orgId = getContextOrgId();
-        if (orgId && TENANT_MODELS.has(model)) {
+        const facilityId = getContextFacilityId();
+        if (facilityId && TENANT_MODELS.has(model)) {
           const owned = await baseClient[model].findFirst({
-            where: { AND: [args.where, { organizationId: orgId }] },
+            where: { AND: [args.where, { facilityId }] },
             select: { id: true },
           });
           if (!owned) throw notFoundError();

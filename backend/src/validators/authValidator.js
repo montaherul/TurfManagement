@@ -1,22 +1,58 @@
 import { z } from 'zod';
 
-export const registerSchema = z.object({
-  body: z.object({
-    email: z.string().email('A valid email is required').toLowerCase(),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    firstName: z.string().trim().min(1, 'First name is required').max(50),
-    lastName: z.string().trim().min(1, 'Last name is required').max(50),
-    organizationName: z.string().trim().min(2).max(100).optional(),
-    orgName: z.string().trim().min(2).max(100).optional(),
-    organizationSlug: z.string().trim().min(2).max(100).optional(),
-  }),
-});
+const mobileSchema = z.string().regex(/^01[3-9]\d{8}$/, 'Enter a valid Bangladeshi mobile number');
 
 export const loginSchema = z.object({
   body: z.object({
-    email: z.string().email('A valid email is required').toLowerCase(),
+    email: z.string().email('Invalid email'),
     password: z.string().min(1, 'Password is required'),
   }),
 });
 
-export const refreshSchema = z.object({});
+export const applyForFacilitySchema = z.object({
+  body: z.object({
+    facilityName: z.string().min(2, 'Facility name is required').max(100),
+    ownerName: z.string().min(2, 'Owner name is required').max(100),
+    ownerEmail: z.string().email('Invalid email'),
+    ownerPhone: mobileSchema,
+    phone: z.string().optional(),
+    email: z.string().email().optional(),
+    address: z.object({
+      line: z.string().optional(),
+      area: z.string().optional(),
+      city: z.string().optional(),
+      lat: z.number().optional(),
+      lng: z.number().optional(),
+    }).optional(),
+    description: z.string().max(2000).optional(),
+  }),
+});
+
+export const requestOtpSchema = z.object({
+  body: z.object({
+    mobile: mobileSchema,
+    purpose: z.enum(['LOGIN', 'BOOKING']).default('LOGIN'),
+  }),
+});
+
+export const verifyOtpSchema = z.object({
+  body: z.object({
+    mobile: mobileSchema,
+    code: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+    purpose: z.enum(['LOGIN', 'BOOKING']).default('LOGIN'),
+  }),
+});
+
+export const refreshSchema = z.object({
+  body: z.object({
+    refreshToken: z.string().optional(),
+  }),
+});
+
+export default {
+  loginSchema,
+  applyForFacilitySchema,
+  requestOtpSchema,
+  verifyOtpSchema,
+  refreshSchema,
+};

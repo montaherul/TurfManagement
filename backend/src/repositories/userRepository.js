@@ -4,8 +4,9 @@ import { createPaginatedRepository } from './paginatedRepository.js';
 
 const publicUserSelect = {
   id: true,
-  organizationId: true,
+  facilityId: true,
   email: true,
+  mobile: true,
   firstName: true,
   lastName: true,
   role: true,
@@ -23,13 +24,13 @@ const authUserSelect = {
 };
 
 export const userListRepository = createPaginatedRepository(prisma, 'User', {
-  searchableFields: ['email', 'firstName', 'lastName'],
+  searchableFields: ['email', 'mobile', 'firstName', 'lastName'],
   filterMap: {
     role: 'role',
-    organizationId: 'organizationId',
+    facilityId: 'facilityId',
     isActive: { field: 'isActive', type: 'boolean' },
   },
-  sortableFields: ['email', 'firstName', 'lastName', 'role', 'createdAt', 'updatedAt', 'lastLoginAt'],
+  sortableFields: ['email', 'mobile', 'firstName', 'lastName', 'role', 'createdAt', 'updatedAt', 'lastLoginAt'],
   select: publicUserSelect,
 });
 
@@ -42,8 +43,14 @@ export const userRepository = {
   findByEmail: (email) =>
     prisma.user.findFirst({ where: { email }, select: authUserSelect }),
 
+  findByMobile: (mobile) =>
+    prisma.user.findFirst({ where: { mobile }, select: authUserSelect }),
+
   findByEmailPublic: (email) =>
     prisma.user.findFirst({ where: { email }, select: publicUserSelect }),
+
+  findByMobilePublic: (mobile) =>
+    prisma.user.findFirst({ where: { mobile }, select: publicUserSelect }),
 };
 
 export default userRepository;

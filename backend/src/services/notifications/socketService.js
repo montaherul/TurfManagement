@@ -6,7 +6,7 @@ let ioInstance = null;
 
 /**
  * Socket.io singleton. initializeSocket must be called once from the
- * composition root; emitToOrganization / emitToUser are safe to call
+ * composition root; emitToFacility / emitToUser are safe to call
  * anywhere (they no-op if sockets are not initialized).
  */
 export const initializeSocket = (io) => {
@@ -25,9 +25,11 @@ export const initializeSocket = (io) => {
   });
 
   io.on('connection', (socket) => {
-    const { organizationId, userId, role } = socket.user;
+    const { facilityId, userId, role } = socket.user;
 
-    socket.join(`org:${organizationId}`);
+    if (facilityId) {
+      socket.join(`facility:${facilityId}`);
+    }
 
     if (userId) {
       socket.join(`user:${userId}`);
@@ -50,9 +52,9 @@ export const initializeSocket = (io) => {
   return io;
 };
 
-export const emitToOrganization = (organizationId, event, data) => {
+export const emitToFacility = (facilityId, event, data) => {
   if (!ioInstance) return false;
-  ioInstance.to(`org:${organizationId}`).emit(event, data);
+  ioInstance.to(`facility:${facilityId}`).emit(event, data);
   return true;
 };
 

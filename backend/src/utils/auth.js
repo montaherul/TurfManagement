@@ -5,9 +5,9 @@ import { config } from 'dotenv';
 
 config();
 
-export const generateTokens = (userId, role, organizationId) => {
+export const generateTokens = (userId, role, facilityId) => {
   const accessToken = jwt.sign(
-    { userId, role, organizationId, type: 'access' },
+    { userId, role, facilityId, type: 'access' },
     process.env.JWT_SECRET,
     { expiresIn: '15m' }
   );

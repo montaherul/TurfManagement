@@ -2,7 +2,7 @@ import { prisma } from '../config/db.js';
 
 const notificationSelect = {
   id: true,
-  organizationId: true,
+  facilityId: true,
   userId: true,
   event: true,
   title: true,

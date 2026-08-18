@@ -1,53 +1,61 @@
 import { tenantContext } from '../config/db.js';
 import { AppError } from '../utils/ApiError.js';
-import { organizationRepository } from '../repositories/organizationRepository.js';
+import { facilityRepository } from '../repositories/facilityRepository.js';
 import { cacheGet, cacheSet } from '../config/redis.js';
 
-const ORG_CACHE_TTL = 60;
+const FACILITY_CACHE_TTL = 60;
 
+/**
+ * Resolves the facility tenant from the JWT, verifies it exists and is
+ * operational, and runs the handler inside tenantContext so every Prisma
+ * query is auto-scoped to the facility (defense in depth).
+ * platform_admin requests without a facilityId bypass scoping.
+ */
 export const tenantMiddleware = async (req, res, next) => {
   try {
-    const organizationId = req.organizationId;
+    const facilityId = req.facilityId;
 
-    if (!organizationId) {
-      if (req.user?.role === 'super_admin') {
+    if (!facilityId) {
+      if (req.user?.role === 'platform_admin' || req.user?.role === 'booker') {
         req.tenant = null;
-        return tenantContext.run({ organizationId: null }, () => next());
+        return tenantContext.run({ facilityId: null }, () => next());
       }
       return res.status(403).json({
         success: false,
-        message: 'Organization context required',
-        code: 'ORG_CONTEXT_REQUIRED',
+        message: 'Facility context required',
+        code: 'FACILITY_CONTEXT_REQUIRED',
       });
     }
 
-    let org = await cacheGet(`tenant:org:${organizationId}`);
-    if (!org) {
-      org = await organizationRepository.findById(organizationId);
-      if (org) await cacheSet(`tenant:org:${organizationId}`, org, ORG_CACHE_TTL);
+    let facility = await cacheGet(`tenant:facility:${facilityId}`);
+    if (!facility) {
+      facility = await facilityRepository.findById(facilityId);
+      if (facility) await cacheSet(`tenant:facility:${facilityId}`, facility, FACILITY_CACHE_TTL);
     }
 
-    if (!org) {
+    if (!facility) {
       return res.status(403).json({
         success: false,
-        message: 'Organization not found or access denied',
-        code: 'ORG_NOT_FOUND',
+        message: 'Facility not found or access denied',
+        code: 'FACILITY_NOT_FOUND',
       });
     }
 
-    if (org.settings?.suspended) {
+    if (facility.status === 'SUSPENDED' || facility.status === 'REJECTED') {
       return res.status(403).json({
         success: false,
-        message: 'Organization has been suspended',
-        code: 'ORG_SUSPENDED',
+        message: 'Facility is not operational',
+        code: 'FACILITY_SUSPENDED',
       });
     }
 
-    req.tenant = org;
-    req.organizationId = organizationId;
+    req.tenant = facility;
+    req.facilityId = facilityId;
 
-    tenantContext.run({ organizationId }, () => next());
+    tenantContext.run({ facilityId }, () => next());
   } catch (error) {
-    next(new AppError(403, 'Organization context required', { code: 'ORG_CONTEXT_REQUIRED', data: null }));
+    next(new AppError(403, 'Facility context required', { code: 'FACILITY_CONTEXT_REQUIRED' }));
   }
 };
+
+export default tenantMiddleware;

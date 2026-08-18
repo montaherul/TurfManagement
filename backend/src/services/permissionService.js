@@ -10,8 +10,8 @@ const CACHE_TTL_MS = 30 * 1000;
 
 /**
  * Permission resolution:
- *   defaults -> platform role rows (orgId null) -> org role rows -> per-user override
- * super_admin always has every action (platform operators must never lock themselves out).
+ *   defaults -> platform role rows (facilityId null) -> facility role rows -> per-user override
+ * platform_admin always has every action (platform operators must never lock themselves out).
  */
 export const createPermissionService = ({
   rolePermissionRepository,
@@ -41,21 +41,21 @@ export const createPermissionService = ({
   };
 
   const buildEffectivePermissions = async (user) => {
-    if (user.role === 'super_admin') {
+    if (user.role === 'platform_admin') {
       return new Set(PERMISSION_CATALOG.map((p) => p.action));
     }
 
-    const [userOverrides, orgRows, platformRows] = await Promise.all([
+    const [userOverrides, facilityRows, platformRows] = await Promise.all([
       userPermissionRepository.findMany({ userId: userIdOf(user) }),
-      rolePermissionRepository.findMany({ role: user.role, organizationId: user.organizationId }),
-      rolePermissionRepository.findMany({ role: user.role, organizationId: null }),
+      rolePermissionRepository.findMany({ role: user.role, facilityId: user.facilityId }),
+      rolePermissionRepository.findMany({ role: user.role, facilityId: null }),
     ]);
 
-    // Org config replaces platform config; platform config replaces defaults.
+    // Facility config replaces platform config; platform config replaces defaults.
     // Empty (unconfigured) falls back to the built-in defaults.
     let effective;
-    if (orgRows.length) {
-      effective = new Set(orgRows.map((row) => row.action));
+    if (facilityRows.length) {
+      effective = new Set(facilityRows.map((row) => row.action));
     } else if (platformRows.length) {
       effective = new Set(platformRows.map((row) => row.action));
     } else {
@@ -106,8 +106,8 @@ export const createPermissionService = ({
     return { role, actions: [...(DEFAULT_ROLE_PERMISSIONS[role] || [])].sort() };
   };
 
-  const listRolePermissions = async ({ organizationId = null } = {}) => {
-    const rows = await rolePermissionRepository.findMany({ organizationId });
+  const listRolePermissions = async ({ facilityId = null } = {}) => {
+    const rows = await rolePermissionRepository.findMany({ facilityId });
     return ROLES.map((role) => roleConfigFromRows(rows, role));
   };
 
@@ -120,26 +120,26 @@ export const createPermissionService = ({
   const syncRolePermissions = async ({
     role,
     actions,
-    organizationId = null,
+    facilityId = null,
     actorId,
-    organizationIdForAudit,
+    facilityIdForAudit,
     ipAddress,
   }) => {
     if (!ROLES.includes(role)) {
       throw new AppError(422, `Invalid role: ${role}`, { code: 'VALIDATION_ERROR' });
     }
     const cleanActions = validateActions(actions);
-    await rolePermissionRepository.deleteMany({ role, organizationId });
+    await rolePermissionRepository.deleteMany({ role, facilityId });
     for (const action of cleanActions) {
-      await rolePermissionRepository.create({ role, action, organizationId });
+      await rolePermissionRepository.create({ role, action, facilityId });
     }
     await auditLogRepository.create({
-      organizationId: organizationIdForAudit ?? organizationId ?? null,
+      facilityId: facilityIdForAudit ?? facilityId ?? null,
       userId: actorId,
       action: 'permission.role.update',
       resource: 'role',
-      resourceId: `${organizationId || 'platform'}:${role}`,
-      details: { role, organizationId, actions: cleanActions },
+      resourceId: `${facilityId || 'platform'}:${role}`,
+      details: { role, facilityId, actions: cleanActions },
       ipAddress: ipAddress || null,
     });
     return { role, actions: cleanActions };
@@ -154,11 +154,11 @@ export const createPermissionService = ({
     };
   };
 
-  const syncUserOverrides = async ({ userId, allowed = [], denied = [], actorId, organizationId, ipAddress }) => {
+  const syncUserOverrides = async ({ userId, allowed = [], denied = [], actorId, facilityId, ipAddress }) => {
     const user = await userRepository.findById(userId);
     if (!user) throw new AppError(404, 'User not found', { code: 'NOT_FOUND' });
-    if (user.role === 'super_admin') {
-      throw new AppError(422, 'Super admins always have full permissions', { code: 'VALIDATION_ERROR' });
+    if (user.role === 'platform_admin') {
+      throw new AppError(422, 'Platform admins always have full permissions', { code: 'VALIDATION_ERROR' });
     }
     const cleanAllowed = validateActions(allowed);
     const cleanDenied = validateActions(denied).filter((a) => !cleanAllowed.includes(a));
@@ -174,7 +174,7 @@ export const createPermissionService = ({
     }
     invalidateUser(userId);
     await auditLogRepository.create({
-      organizationId: organizationId ?? user.organizationId,
+      facilityId: facilityId ?? user.facilityId,
       userId: actorId,
       action: 'permission.user.update',
       resource: 'user',
@@ -185,17 +185,17 @@ export const createPermissionService = ({
     return { userId, allowed: cleanAllowed, denied: cleanDenied };
   };
 
-  const updateUserRole = async ({ userId, role, isActive, actorId, organizationId, ipAddress }) => {
+  const updateUserRole = async ({ userId, role, isActive, actorId, facilityId, ipAddress }) => {
     const user = await userRepository.findById(userId);
     if (!user) throw new AppError(404, 'User not found', { code: 'NOT_FOUND' });
-    if (organizationId && user.organizationId !== organizationId) {
-      throw new AppError(403, 'Cannot update a user outside your organization', { code: 'FORBIDDEN' });
+    if (facilityId && user.facilityId !== facilityId) {
+      throw new AppError(403, 'Cannot update a user outside your facility', { code: 'FORBIDDEN' });
     }
     if (role !== undefined && !ROLES.includes(role)) {
       throw new AppError(422, `Invalid role: ${role}`, { code: 'VALIDATION_ERROR' });
     }
-    if (user.role === 'super_admin' && role !== undefined && role !== 'super_admin') {
-      throw new AppError(422, 'A super admin cannot be demoted', { code: 'VALIDATION_ERROR' });
+    if (user.role === 'platform_admin' && role !== undefined && role !== 'platform_admin') {
+      throw new AppError(422, 'A platform admin cannot be demoted', { code: 'VALIDATION_ERROR' });
     }
     const data = {};
     if (role !== undefined) data.role = role;
@@ -203,7 +203,7 @@ export const createPermissionService = ({
     const updated = await userRepository.update(userId, data);
     invalidateUser(userId);
     await auditLogRepository.create({
-      organizationId: organizationId ?? user.organizationId,
+      facilityId: facilityId ?? user.facilityId,
       userId: actorId,
       action: 'user.update',
       resource: 'user',
@@ -214,14 +214,14 @@ export const createPermissionService = ({
     return updated;
   };
 
-  const removeUser = async ({ userId, actorId, organizationId, ipAddress }) => {
+  const removeUser = async ({ userId, actorId, facilityId, ipAddress }) => {
     const user = await userRepository.findById(userId);
     if (!user) throw new AppError(404, 'User not found', { code: 'NOT_FOUND' });
-    if (organizationId && user.organizationId !== organizationId) {
-      throw new AppError(403, 'Cannot remove a user outside your organization', { code: 'FORBIDDEN' });
+    if (facilityId && user.facilityId !== facilityId) {
+      throw new AppError(403, 'Cannot remove a user outside your facility', { code: 'FORBIDDEN' });
     }
-    if (user.role === 'super_admin') {
-      throw new AppError(422, 'A super admin cannot be removed', { code: 'VALIDATION_ERROR' });
+    if (user.role === 'platform_admin') {
+      throw new AppError(422, 'A platform admin cannot be removed', { code: 'VALIDATION_ERROR' });
     }
     if (actorId && actorId === userId) {
       throw new AppError(422, 'You cannot remove your own account', { code: 'VALIDATION_ERROR' });
@@ -231,7 +231,7 @@ export const createPermissionService = ({
     invalidateUser(userId);
 
     await auditLogRepository.create({
-      organizationId: organizationId ?? user.organizationId,
+      facilityId: facilityId ?? user.facilityId,
       userId: actorId,
       action: 'user.delete',
       resource: 'user',
@@ -243,9 +243,9 @@ export const createPermissionService = ({
     return user;
   };
 
-  const listUsers = ({ organizationId, page, limit, search, role, sort }) =>
+  const listUsers = ({ facilityId, page, limit, search, role, sort }) =>
     userListRepository.list({
-      organizationId,
+      facilityId,
       page,
       limit,
       search,

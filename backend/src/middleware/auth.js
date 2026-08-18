@@ -18,7 +18,7 @@ export const authMiddleware = async (req, res, next) => {
     const decoded = jwt.verify(token, env.jwtSecret);
 
     req.user = decoded;
-    req.organizationId = decoded.organizationId || null;
+    req.facilityId = decoded.facilityId || null;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -53,10 +53,10 @@ export const optionalAuth = async (req, res, next) => {
     try {
       const decoded = jwt.verify(authHeader.split(' ')[1], env.jwtSecret);
       req.user = decoded;
-      req.organizationId = decoded.organizationId || null;
+      req.facilityId = decoded.facilityId || null;
     } catch {
       req.user = null;
-      req.organizationId = null;
+      req.facilityId = null;
     }
   }
   next();

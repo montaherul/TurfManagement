@@ -1,66 +1,91 @@
 import { successResponse } from '../utils/asyncHandler.js';
 
 export const createAdminController = ({ adminService }) => {
-  const getSystemHealth = async (req, res) => {
-    const health = await adminService.getSystemHealth();
-    return successResponse(res, health);
-  };
-
-  const getAllUsers = async (req, res) => {
-    const result = await adminService.listUsers({
+  const listFacilities = async (req, res) => {
+    const result = await adminService.listFacilities({
       page: req.query.page,
       limit: req.query.limit,
-      sort: req.query.sort,
       search: req.query.search,
-      filters: req.query,
+      status: req.query.status,
+      sort: req.query.sort,
     });
-    return res.json({ success: true, message: 'Users retrieved successfully', ...result });
+    return successResponse(res, result, 'Facilities retrieved');
   };
 
-  const createUser = async (req, res) => {
-    const user = await adminService.createUser({
-      actorRole: req.user.role,
-      actorOrganizationId: req.organizationId,
-      data: { ...req.body, actorId: req.user.userId },
+  const getFacility = async (req, res) => {
+    const facility = await adminService.getFacility(req.params.id);
+    return successResponse(res, { facility }, 'Facility retrieved');
+  };
+
+  const approve = async (req, res) => {
+    const result = await adminService.approveApplication({
+      facilityId: req.params.id,
+      actorId: req.user.userId,
       ipAddress: req.ip,
     });
-    return successResponse(res, { user }, 'User created successfully', 201);
+    return successResponse(res, result, 'Application approved');
   };
 
-  const getAllFields = async (req, res) => {
-    const result = await adminService.listFields({
+  const reject = async (req, res) => {
+    const facility = await adminService.rejectApplication({
+      facilityId: req.params.id,
+      reason: req.body.reason,
+      actorId: req.user.userId,
+      ipAddress: req.ip,
+    });
+    return successResponse(res, { facility }, 'Application rejected');
+  };
+
+  const setFacilityStatus = async (req, res) => {
+    const facility = await adminService.setFacilityStatus({
+      facilityId: req.params.id,
+      status: req.body.status,
+      actorId: req.user.userId,
+      ipAddress: req.ip,
+    });
+    return successResponse(res, { facility }, 'Facility status updated');
+  };
+
+  const listCustomers = async (req, res) => {
+    const result = await adminService.listCustomers({
       page: req.query.page,
       limit: req.query.limit,
-      sort: req.query.sort,
       search: req.query.search,
-      filters: req.query,
+      sort: req.query.sort,
     });
-    return res.json({ success: true, message: 'Fields retrieved successfully', ...result });
+    return successResponse(res, result, 'Customers retrieved');
   };
 
-  const getAuditLogs = async (req, res) => {
-    const result = await adminService.listAuditLogs({
-      page: req.query.page,
-      limit: req.query.limit,
-      sort: req.query.sort,
-      search: req.query.search,
-      filters: req.query,
-    });
-    return res.json({ success: true, message: 'Audit logs retrieved successfully', ...result });
+  const feeSummary = async (req, res) => {
+    const summary = await adminService.feeSummary();
+    return successResponse(res, { fees: summary }, 'Fee summary');
   };
 
-  const getOrganizations = async (req, res) => {
-    const result = await adminService.listOrganizations({
-      page: req.query.page,
-      limit: req.query.limit,
-      sort: req.query.sort,
-      search: req.query.search,
-      filters: req.query,
-    });
-    return res.json({ success: true, message: 'Organizations retrieved successfully', ...result });
+  const getSettings = async (req, res) => {
+    const settings = await adminService.getSettings();
+    return successResponse(res, { settings }, 'Platform settings');
   };
 
-  return { getSystemHealth, getAllUsers, createUser, getAllFields, getAuditLogs, getOrganizations };
+  const setSettings = async (req, res) => {
+    const updated = await adminService.setSettings({
+      settings: req.body,
+      actorId: req.user.userId,
+      ipAddress: req.ip,
+    });
+    return successResponse(res, { settings: updated }, 'Platform settings updated');
+  };
+
+  return {
+    listFacilities,
+    getFacility,
+    approve,
+    reject,
+    setFacilityStatus,
+    listCustomers,
+    feeSummary,
+    getSettings,
+    setSettings,
+  };
 };
 
 export default createAdminController;

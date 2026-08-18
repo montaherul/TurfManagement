@@ -1,91 +1,93 @@
-import { AppError } from '../utils/ApiError.js';
-import { hashPassword, comparePassword, generateTokens } from '../utils/auth.js';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import { AppError } from '../utils/ApiError.js';
+import { comparePassword, generateTokens } from '../utils/auth.js';
 import { env } from '../config/env.js';
-import { PLANS } from './planLimitService.js';
+import { otpRepository, otpConfig } from '../repositories/otpRepository.js';
+
+const STAFF_ROLES = ['platform_admin', 'facility_owner', 'manager', 'operator'];
 
 export const createAuthService = ({
   userRepository,
-  organizationRepository,
-  subscriptionRepository,
+  facilityRepository,
   auditLogRepository,
+  notificationService,
 }) => {
   const buildSession = async (user) => {
-    const { accessToken, refreshToken } = generateTokens(user.id, user.role, user.organizationId);
-    return { user, accessToken, refreshToken };
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role, user.facilityId || null);
+    const { passwordHash: _passwordHash, ...publicUser } = user;
+    return { user: publicUser, accessToken, refreshToken };
   };
 
-  const register = async ({ email, password, firstName, lastName, organizationName, organizationSlug, ipAddress }) => {
-    const existing = await userRepository.findByEmailPublic(email);
-    if (existing) {
-      throw new AppError(409, 'User with this email already exists', { code: 'EMAIL_TAKEN' });
+  /**
+   * Owner onboarding application — creates a PENDING Facility. The owner
+   * account is created by the platform admin at approval time.
+   */
+  const applyForFacility = async ({
+    facilityName,
+    ownerName,
+    ownerEmail,
+    ownerPhone,
+    phone,
+    email,
+    address,
+    description,
+    ipAddress,
+  }) => {
+    const existing = await facilityRepository.findFirst({
+      OR: [{ email: ownerEmail }, { phone: ownerPhone }],
+    });
+    if (existing && existing.status === 'PENDING') {
+      throw new AppError(409, 'An application with this contact already exists', { code: 'APPLICATION_EXISTS' });
+    }
+    if (existing && existing.status !== 'REJECTED') {
+      throw new AppError(409, 'A facility with this contact is already registered', { code: 'FACILITY_EXISTS' });
     }
 
-    const passwordHash = await hashPassword(password);
-    let organizationId = null;
-    let role = 'viewer';
-
-    if (organizationName) {
-      const slug = organizationRepository.createSlug(organizationName);
-      const org = await organizationRepository.create({
-        name: organizationName,
-        slug,
-        settings: {},
-        subscription: { planId: 'free' },
-      });
-      organizationId = org.id;
-      role = 'org_admin';
-
-      await subscriptionRepository.create({
-        organizationId: org.id,
-        planId: 'free',
-        status: 'active',
-        billingModel: 'subscription',
-        inspectionsUsed: 0,
-        inspectionsLimit: PLANS.free.inspections,
-        amountBDT: 0,
-        currency: 'BDT',
-      });
-    } else if (organizationSlug) {
-      const org = await organizationRepository.findBySlug(organizationSlug);
-      if (!org) {
-        throw new AppError(404, 'Organization not found', { code: 'ORG_NOT_FOUND' });
-      }
-      organizationId = org.id;
-      role = 'viewer';
-    } else {
-      throw new AppError(422, 'Organization name or organization slug is required', {
-        code: 'ORG_REQUIRED',
-      });
-    }
-
-    const user = await userRepository.create({
-      email,
-      passwordHash,
-      firstName,
-      lastName,
-      role,
-      organizationId,
-      isActive: true,
-      notificationPreferences: { email: true, inApp: true, sms: false },
+    const facility = await facilityRepository.create({
+      name: facilityName,
+      slug: facilityRepository.createSlug(facilityName),
+      status: 'PENDING',
+      phone: phone || ownerPhone,
+      email: email || ownerEmail,
+      address: address || null,
+      description: description || null,
+      application: {
+        ownerName,
+        ownerEmail,
+        ownerPhone,
+        documentNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionReason: null,
+      },
     });
 
     await auditLogRepository.create({
-      organizationId,
-      userId: user.id,
-      action: 'auth.register',
-      resource: 'user',
-      resourceId: user.id,
-      details: { email: user.email, role: user.role },
+      facilityId: facility.id,
+      action: 'facility.apply',
+      resource: 'facility',
+      resourceId: facility.id,
+      details: { ownerName, ownerEmail },
       ipAddress: ipAddress || null,
     });
 
-    return buildSession(user);
+    await notificationService.notifyPlatform('facility:applied', {
+      facilityId: facility.id,
+      facilityName: facility.name,
+      ownerName,
+      ownerEmail,
+    });
+
+    return facility;
   };
 
   const login = async ({ email, password, ipAddress }) => {
     const user = await userRepository.findByEmail(email);
-    if (!user) {
+    if (!user || !STAFF_ROLES.includes(user.role)) {
+      throw new AppError(401, 'Invalid email or password', { code: 'INVALID_CREDENTIALS' });
+    }
+    if (!user.passwordHash) {
       throw new AppError(401, 'Invalid email or password', { code: 'INVALID_CREDENTIALS' });
     }
 
@@ -100,7 +102,7 @@ export const createAuthService = ({
 
     await userRepository.update(user.id, { lastLoginAt: new Date() });
     await auditLogRepository.create({
-      organizationId: user.organizationId,
+      facilityId: user.facilityId,
       userId: user.id,
       action: 'auth.login',
       resource: 'user',
@@ -108,8 +110,80 @@ export const createAuthService = ({
       ipAddress: ipAddress || null,
     });
 
-    const { passwordHash: _passwordHash, ...publicUser } = user;
-    return buildSession(publicUser);
+    return buildSession(user);
+  };
+
+  /**
+   * Customer OTP login — sends a 6-digit code to the mobile number.
+   * Rate limited to 5 requests per hour per mobile.
+   */
+  const requestOtp = async ({ mobile, purpose = 'LOGIN', ipAddress }) => {
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recent = await otpRepository.countRecent(mobile, purpose, hourAgo);
+    if (recent >= otpConfig.maxPerHour) {
+      throw new AppError(429, 'Too many OTP requests. Try again later.', { code: 'OTP_RATE_LIMITED' });
+    }
+
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const expiresAt = new Date(Date.now() + otpConfig.ttlMinutes * 60 * 1000);
+    await otpRepository.create({ mobile, code, purpose, expiresAt, attempts: 0 });
+
+    await auditLogRepository.create({
+      action: 'auth.otp.request',
+      resource: 'otp',
+      details: { mobile, purpose },
+      ipAddress: ipAddress || null,
+    });
+
+    // No SMS provider configured — the code is returned for dev/testing and
+    // logged. In production, send via the configured SMS gateway.
+    return { ok: true, devCode: code, expiresInMinutes: otpConfig.ttlMinutes };
+  };
+
+  const verifyOtp = async ({ mobile, code, purpose = 'LOGIN', ipAddress }) => {
+    const latest = await otpRepository.findLatest(mobile, purpose);
+    if (!latest) {
+      throw new AppError(401, 'No OTP found for this number', { code: 'INVALID_OTP' });
+    }
+    if (latest.attempts >= otpConfig.maxAttempts) {
+      throw new AppError(429, 'Too many failed attempts. Request a new code.', { code: 'OTP_MAX_ATTEMPTS' });
+    }
+    if (latest.expiresAt < new Date()) {
+      throw new AppError(401, 'OTP has expired. Request a new code.', { code: 'OTP_EXPIRED' });
+    }
+    if (latest.code !== code) {
+      await otpRepository.markAttempt(latest.id, latest.attempts + 1);
+      throw new AppError(401, 'Invalid OTP code', { code: 'INVALID_OTP' });
+    }
+
+    await otpRepository.deleteUsed(mobile, purpose);
+
+    let user = await userRepository.findByMobile(mobile);
+    if (!user) {
+      user = await userRepository.create({
+        mobile,
+        role: 'booker',
+        isActive: true,
+        firstName: null,
+        lastName: null,
+        notificationPreferences: { email: false, inApp: true, sms: true },
+      });
+    }
+    if (!user.isActive) {
+      throw new AppError(403, 'Your account has been deactivated', { code: 'ACCOUNT_DEACTIVATED' });
+    }
+
+    await userRepository.update(user.id, { lastLoginAt: new Date() });
+    await auditLogRepository.create({
+      userId: user.id,
+      action: 'auth.otp.verify',
+      resource: 'user',
+      resourceId: user.id,
+      details: { mobile, purpose },
+      ipAddress: ipAddress || null,
+    });
+
+    return buildSession(user);
   };
 
   const refresh = async (token) => {
@@ -140,7 +214,7 @@ export const createAuthService = ({
     return user;
   };
 
-  return { register, login, refresh, getProfile, verifyActiveUser, buildSession };
+  return { applyForFacility, login, requestOtp, verifyOtp, refresh, getProfile, verifyActiveUser, buildSession };
 };
 
 export default createAuthService;

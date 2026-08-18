@@ -1,67 +1,78 @@
 import { successResponse } from '../utils/asyncHandler.js';
-import { AppError } from '../utils/ApiError.js';
 import { env } from '../config/env.js';
 
-const REFRESH_COOKIE_OPTS = {
-  httpOnly: true,
-  secure: env.isProduction,
-  sameSite: 'strict',
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-};
+const REFRESH_COOKIE = 'refreshToken';
 
 const setRefreshCookie = (res, token) => {
-  res.cookie('refreshToken', token, REFRESH_COOKIE_OPTS);
+  res.cookie(REFRESH_COOKIE, token, {
+    httpOnly: true,
+    secure: env.isProduction,
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
 };
 
 export const createAuthController = ({ authService }) => {
-  const register = async (req, res) => {
-    const { user, accessToken, refreshToken } = await authService.register({
-      email: req.body.email,
-      password: req.body.password,
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      organizationName: req.body.organizationName || req.body.orgName,
-      organizationSlug: req.body.organizationSlug,
+  const applyForFacility = async (req, res) => {
+    const facility = await authService.applyForFacility({
+      ...req.body,
       ipAddress: req.ip,
     });
-
-    setRefreshCookie(res, refreshToken);
-    return successResponse(res, { user, accessToken }, 'User registered successfully', 201);
+    return successResponse(
+      res,
+      { facility },
+      'Application submitted. Our team will review it shortly.',
+      201
+    );
   };
 
   const login = async (req, res) => {
-    const { user, accessToken, refreshToken } = await authService.login({
-      email: req.body.email,
-      password: req.body.password,
-      ipAddress: req.ip,
-    });
+    const session = await authService.login({ ...req.body, ipAddress: req.ip });
+    setRefreshCookie(res, session.refreshToken);
+    return successResponse(res, {
+      user: session.user,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    }, 'Login successful');
+  };
 
-    setRefreshCookie(res, refreshToken);
-    return successResponse(res, { user, accessToken }, 'Login successful');
+  const requestOtp = async (req, res) => {
+    const result = await authService.requestOtp({ ...req.body, ipAddress: req.ip });
+    return successResponse(res, result, 'OTP sent');
+  };
+
+  const verifyOtp = async (req, res) => {
+    const session = await authService.verifyOtp({ ...req.body, ipAddress: req.ip });
+    setRefreshCookie(res, session.refreshToken);
+    return successResponse(res, {
+      user: session.user,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    }, 'OTP verified');
   };
 
   const refresh = async (req, res) => {
-    const token = req.cookies?.refreshToken || req.headers['x-refresh-token'];
-    if (!token) {
-      throw new AppError(401, 'Refresh token missing', { code: 'REFRESH_TOKEN_MISSING' });
-    }
-
-    const { accessToken, refreshToken } = await authService.refresh(token);
-    setRefreshCookie(res, refreshToken);
-    return successResponse(res, { accessToken }, 'Token refreshed');
+    const token = req.body?.refreshToken || req.cookies?.[REFRESH_COOKIE] || req.headers['x-refresh-token'];
+    const session = await authService.refresh(token);
+    setRefreshCookie(res, session.refreshToken);
+    return successResponse(res, {
+      user: session.user,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    }, 'Token refreshed');
   };
 
   const logout = async (req, res) => {
-    res.clearCookie('refreshToken', REFRESH_COOKIE_OPTS);
-    return successResponse(res, null, 'Logout successful');
+    res.clearCookie(REFRESH_COOKIE);
+    return successResponse(res, null, 'Logged out');
   };
 
   const me = async (req, res) => {
     const user = await authService.getProfile(req.user.userId);
-    return successResponse(res, { user });
+    return successResponse(res, { user }, 'Profile retrieved');
   };
 
-  return { register, login, refresh, logout, me };
+  return { applyForFacility, login, requestOtp, verifyOtp, refresh, logout, me };
 };
 
 export default createAuthController;

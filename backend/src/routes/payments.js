@@ -1,26 +1,23 @@
 import express from 'express';
-import { services } from '../config/container.js';
-import { logger } from '../utils/logger.js';
+import { validate } from '../middleware/validate.js';
+import { authMiddleware } from '../middleware/auth.js';
+import { tenantMiddleware } from '../middleware/tenant.js';
+import { permit } from '../middleware/permission.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import {
+  listPaymentsSchema,
+  paymentActionSchema,
+} from '../validators/paymentValidator.js';
+import { services } from '../config/container.js';
 import { createPaymentController } from '../controllers/paymentController.js';
 
 const router = express.Router();
-const paymentController = createPaymentController();
+const paymentController = createPaymentController({ paymentService: services.payments });
 
-router.get('/invoice/:tranId', asyncHandler(paymentController.getInvoice));
-router.get('/invoice/:tranId/pdf', asyncHandler(paymentController.getInvoicePdf));
-
-router.post('/sslcommerz-ipn', express.urlencoded({ extended: false }), async (req, res) => {
-  try {
-    const result = await services.subscriptions.handleIpn(req.body || {});
-    if (!result.ok) {
-      logger.warn(`SSLCommerz IPN rejected: ${result.reason}`);
-    }
-    res.status(200).send('success');
-  } catch (err) {
-    logger.error(`SSLCommerz IPN error: ${err.message}`);
-    res.status(200).send('success');
-  }
-});
+router.get('/', authMiddleware, tenantMiddleware, permit('payment.view'), validate(listPaymentsSchema), asyncHandler(paymentController.list));
+router.get('/pending', authMiddleware, tenantMiddleware, permit('payment.view'), asyncHandler(paymentController.pending));
+router.get('/wallet', authMiddleware, tenantMiddleware, permit('payment.view'), asyncHandler(paymentController.wallet));
+router.post('/:id/verify', authMiddleware, tenantMiddleware, permit('payment.verify'), validate(paymentActionSchema), asyncHandler(paymentController.verify));
+router.post('/:id/reject', authMiddleware, tenantMiddleware, permit('payment.verify'), validate(paymentActionSchema), asyncHandler(paymentController.reject));
 
 export default router;

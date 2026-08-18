@@ -7,70 +7,92 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Organization {
-  id              String   @id @default(cuid())
-  name            String
-  slug            String   @unique
-  logo            String?
-  address         Json?
-  primaryContact  Json?
-  subscription    Json?
-  settings        Json?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+model Facility {
+  id                  String   @id @default(cuid())
+  name                String
+  slug                String   @unique
+  status              String   @default("PENDING") // PENDING | APPROVED | REJECTED | SUSPENDED | ACTIVE
+  logo                String?
+  coverPhoto          String?
+  phone               String?
+  email               String?
+  address             Json?
+  facebookUrl         String?
+  bkashNumber         String?
+  nagadNumber         String?
+  operatingHours      Json? // { mon: {open,close}, ... }
+  description         String?
+  gallery             Json?
+  cancellationPolicy  Json? // { noticeHours, fullRefundHours, partialRefundPercent }
+  application         Json? // { ownerName, ownerEmail, ownerPhone, ownerPasswordNote?, documentNote, reviewedBy, reviewedAt, rejectionReason }
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  users          User[]
-  fields         Field[]
-  inspections    Inspection[]
-  workOrders     WorkOrder[]
-  subscriptionDb Subscription?
-  auditLogs      AuditLog[]
+  users           User[]
+  resources       Resource[]
+  slots           Slot[]
+  bookings        Booking[]
+  payments        Payment[]
+  packages        Package[]
+  packagePurchases PackagePurchase[]
+  tournaments     Tournament[]
+  expenses        Expense[]
+  blacklists      Blacklist[]
+  maintenance     Maintenance[]
+  auditLogs       AuditLog[]
   rolePermissions RolePermission[]
-  payments       Payment[]
-  notifications  Notification[]
+  notifications   Notification[]
   scheduledReports ScheduledReport[]
+
+  @@index([status])
 }
 
 model User {
-  id                      String   @id @default(cuid())
-  organizationId          String?
-  email                   String   @unique
-  passwordHash            String
-  firstName               String
-  lastName                String
-  role                    String
-  isActive                Boolean  @default(true)
+  id                      String    @id @default(cuid())
+  facilityId              String?
+  email                   String?   @unique
+  mobile                  String?   @unique
+  passwordHash            String?
+  firstName               String?
+  lastName                String?
+  role                    String    // platform_admin | facility_owner | manager | operator | booker
+  isActive                Boolean   @default(true)
   lastLoginAt             DateTime?
   profilePhoto            String?
   notificationPreferences Json?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  organization          Organization?  @relation(fields: [organizationId], references: [id])
-  inspections          Inspection[]   @relation("Inspector")
-  verifiedInspections  Inspection[]   @relation("VerifiedBy")
-  assignedWorkOrders   WorkOrder[]    @relation("Assignee")
-  auditLogs            AuditLog[]
-  userPermissions      UserPermission[]
-  notifications        Notification[]
+  facility        Facility?        @relation(fields: [facilityId], references: [id])
+  auditLogs       AuditLog[]
+  userPermissions UserPermission[]
+  notifications   Notification[]
+  bookings        Booking[]        @relation("Customer")
+  payments        Payment[]        @relation("Payer")
+  verifiedPayments Payment[]       @relation("VerifiedBy")
+  blacklists      Blacklist[]
+  addedBlacklists Blacklist[]      @relation("AddedBy")
+  packagePurchases PackagePurchase[]
+  tournamentTeams TournamentTeam[]
 
-  @@index([organizationId, role])
-  @@index([organizationId, isActive])
+  @@index([facilityId, role])
+  @@index([facilityId, isActive])
+  @@index([role])
 }
 
 model RolePermission {
-  id             String       @id @default(cuid())
-  role           String
-  action         String
-  organizationId String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id         String   @id @default(cuid())
+  role       String
+  action     String
+  facilityId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  organization  Organization? @relation(fields: [organizationId], references: [id])
+  facility Facility? @relation(fields: [facilityId], references: [id])
 
-  @@unique([organizationId, role, action])
+  @@unique([facilityId, role, action])
   @@index([role, action])
-  @@index([organizationId, role])
+  @@index([facilityId, role])
 }
 
 model UserPermission {
@@ -87,188 +109,336 @@ model UserPermission {
   @@index([userId])
 }
 
-model Field {
-  id             String   @id @default(cuid())
-  organizationId String
-  fieldId        String
-  name           String
-  sportType      String
-  location       Json?
-  address        Json?
-  dimensions     Json?
-  turfType       String?
-  grassSpecies   String?
-  drainageType   String?
-  gpsCoordinates Json?
-  photos         Json?
-  status         String   @default("active")
-  metadata       Json?
-  currentScore   Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+model Resource {
+  id                String   @id @default(cuid())
+  facilityId        String
+  name              String
+  type              String // FOOTBALL | BADMINTON | POOL | SNOOKER | CRICKET | BASKETBALL | TENNIS | OTHER
+  capacity          Int      @default(1)
+  basePrice         Int      @default(0)
+  status            String   @default("ACTIVE") // ACTIVE | INACTIVE | MAINTENANCE
+  scheduleTemplate  Json? // { startTime, endTime, stepMinutes, days[], peakRanges[] }
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  inspections  Inspection[]
-  workOrders   WorkOrder[]
+  facility    Facility     @relation(fields: [facilityId], references: [id])
+  slots       Slot[]
+  bookings    Booking[]
+  maintenance Maintenance[]
 
-  @@unique([organizationId, fieldId])
-  @@index([organizationId, sportType])
+  @@index([facilityId, type])
+  @@index([facilityId, status])
 }
 
-model Inspection {
-  id              String   @id @default(cuid())
-  organizationId  String
-  fieldId         String
-  inspectorId     String
-  inspectionDate  DateTime
-  weatherConditions Json?
-  surfaceAssessment Json?
-  soilAssessment    Json?
-  structuralAssessment Json?
-  grassHealth       Json?
-  photographs       Json?
-  pitchQualityScore Json?
-  recommendations  Json?
-  status           String   @default("draft")
-  verifiedBy       String?
-  verifiedAt       DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model Slot {
+  id         String   @id @default(cuid())
+  facilityId String
+  resourceId String
+  date       DateTime // date only (00:00)
+  startTime  String // "16:00"
+  endTime    String // "17:00"
+  price      Int
+  isPeak     Boolean  @default(false)
+  status     String   @default("AVAILABLE") // AVAILABLE | BOOKED | BLOCKED | MAINTENANCE
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  field        Field         @relation(fields: [fieldId], references: [id])
-  inspector    User          @relation("Inspector", fields: [inspectorId], references: [id])
-  verifier     User?         @relation("VerifiedBy", fields: [verifiedBy], references: [id])
-  workOrders   WorkOrder[]
+  facility     Facility     @relation(fields: [facilityId], references: [id])
+  resource     Resource     @relation(fields: [resourceId], references: [id])
+  bookingItems BookingItem[]
 
-  @@index([organizationId, fieldId, inspectionDate(sort: Desc)])
-  @@index([organizationId, inspectorId, createdAt(sort: Desc)])
-  @@index([organizationId, status])
+  @@unique([resourceId, date, startTime])
+  @@index([facilityId, date, status])
+  @@index([resourceId, date])
 }
 
-model WorkOrder {
-  id             String   @id @default(cuid())
-  organizationId String
-  workOrderId    String   @unique
-  fieldId        String
-  inspectionId   String?
-  title          String
-  description    String?
-  tasks          Json?
-  priority       String
-  status         String   @default("created")
-  assignedTo     String?
-  dueDate        DateTime?
-  completedDate  DateTime?
-  estimatedCost  Json?
-  actualCost     Json?
+model Booking {
+  id             String    @id @default(cuid())
+  facilityId     String
+  bookingNo      String    @unique
+  customerId     String
+  resourceId     String
+  date           DateTime // date only
+  startTime      String
+  endTime        String
+  totalAmount    Int
+  paidAmount     Int       @default(0)
+  dueAmount      Int       @default(0)
+  platformFee    Int       @default(15)
+  status         String    @default("PENDING") // PENDING | CONFIRMED | COMPLETED | CANCELLED | REFUNDED | NO_SHOW
+  paymentMethod  String? // BKASH | NAGAD | CASH
+  transactionId  String?
+  otpVerifiedAt  DateTime?
+  checkInAt      DateTime?
+  checkOutAt     DateTime?
+  cancelledBy    String?
+  cancelledAt    DateTime?
+  cancelReason   String?
   notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-  field        Field        @relation(fields: [fieldId], references: [id])
-  inspection   Inspection?  @relation(fields: [inspectionId], references: [id])
-  assignee     User?        @relation("Assignee", fields: [assignedTo], references: [id])
-
-  @@index([organizationId, status, priority])
-  @@index([organizationId, fieldId, dueDate])
-}
-
-model Subscription {
-  id                  String   @id @default(cuid())
-  organizationId      String   @unique
-  planId              String
-  status              String   @default("active")
-  billingModel        String   @default("subscription")
-  currentPeriodStart  DateTime?
-  currentPeriodEnd    DateTime?
-  inspectionsUsed     Int      @default(0)
-  inspectionsLimit    Int?
-  amountBDT           Int      @default(0)
-  currency            String   @default("BDT")
-  paymentMethod       Json?
-  nextBillingDate     DateTime?
-  gracePeriodEnd      DateTime?
-  canceledAt          DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  @@index([status, nextBillingDate])
-}
-
-model AuditLog {
-  id             String   @id @default(cuid())
-  organizationId String?
-  userId         String?
-  action         String
-  resource       String
-  resourceId     String?
-  details        Json?
-  ipAddress      String?
-  createdAt      DateTime @default(now())
-
-  organization Organization? @relation(fields: [organizationId], references: [id])
-  user         User?         @relation(fields: [userId], references: [id])
-
-  @@index([organizationId, createdAt(sort: Desc)])
-}
-
-model Payment {
-  id             String   @id @default(cuid())
-  organizationId String
-  invoiceNo      String   @unique
-  tranId         String   @unique
-  valId          String?
-  planId         String
-  planName       String
-  amountBDT      Int
-  currency       String   @default("BDT")
-  status         String   @default("pending")
-  paymentMethod  Json?
-  billToName     String?
-  billToEmail    String?
-  paidAt         DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  @@index([organizationId, createdAt(sort: Desc)])
-}
-
-model Notification {
-  id             String    @id @default(cuid())
-  organizationId String?
-  userId         String
-  event          String
-  title          String
-  message        String?
-  payload        Json?
-  readAt         DateTime?
-  createdAt      DateTime  @default(now())
-
-  organization Organization? @relation(fields: [organizationId], references: [id])
-  user         User          @relation(fields: [userId], references: [id])
-
-  @@index([userId, readAt])
-  @@index([organizationId, createdAt(sort: Desc)])
-}
-
-model ScheduledReport {
-  id             String    @id @default(cuid())
-  organizationId String
-  frequency      String
-  recipients     Json
-  enabled        Boolean   @default(true)
-  lastRunAt      DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  facility     Facility      @relation(fields: [facilityId], references: [id])
+  customer     User          @relation("Customer", fields: [customerId], references: [id])
+  resource     Resource      @relation(fields: [resourceId], references: [id])
+  bookingItems BookingItem[]
+  payments     Payment[]
 
-  @@index([organizationId])
+  @@index([facilityId, date, status])
+  @@index([facilityId, status])
+  @@index([customerId, status])
+  @@index([facilityId, createdAt(sort: Desc)])
+}
+
+model BookingItem {
+  id        String @id @default(cuid())
+  bookingId String
+  slotId    String @unique
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  slot    Slot    @relation(fields: [slotId], references: [id])
+
+  @@unique([bookingId, slotId])
+  @@index([bookingId])
+}
+
+model Payment {
+  id          String    @id @default(cuid())
+  facilityId  String
+  bookingId   String?
+  paymentNo   String    @unique
+  customerId  String?
+  amount      Int
+  method      String // BKASH | NAGAD | CASH
+  tranId      String?
+  status      String    @default("PENDING") // PENDING | VERIFIED | REJECTED | REFUNDED
+  platformFee Int       @default(0)
+  verifiedBy  String?
+  verifiedAt  DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  facility   Facility  @relation(fields: [facilityId], references: [id])
+  booking    Booking?  @relation(fields: [bookingId], references: [id])
+  customer   User?     @relation("Payer", fields: [customerId], references: [id])
+  verifier   User?     @relation("VerifiedBy", fields: [verifiedBy], references: [id])
+
+  @@index([facilityId, status])
+  @@index([facilityId, createdAt(sort: Desc)])
+  @@index([bookingId])
+}
+
+model Package {
+  id           String   @id @default(cuid())
+  facilityId   String
+  name         String
+  sessions     Int
+  hours        Int
+  price        Int
+  validityDays Int
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  facility   Facility         @relation(fields: [facilityId], references: [id])
+  purchases  PackagePurchase[]
+
+  @@index([facilityId])
+}
+
+model PackagePurchase {
+  id                String    @id @default(cuid())
+  facilityId        String
+  customerId        String
+  packageId         String
+  remainingSessions Int
+  remainingHours    Int
+  expiresAt         DateTime?
+  status            String    @default("ACTIVE") // ACTIVE | EXHAUSTED | EXPIRED
+  createdAt         DateTime  @default(now())
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+  customer User     @relation(fields: [customerId], references: [id])
+  package  Package  @relation(fields: [packageId], references: [id])
+
+  @@index([customerId, status])
+  @@index([facilityId])
+}
+
+model Tournament {
+  id                   String    @id @default(cuid())
+  facilityId           String
+  name                 String
+  sportType            String
+  format               String // KNOCKOUT | ROUND_ROBIN | GROUP
+  entryFee             Int       @default(0)
+  maxTeams             Int
+  registrationDeadline DateTime?
+  startDate            DateTime?
+  status               String    @default("OPEN") // OPEN | REGISTRATION_CLOSED | LIVE | FINISHED
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  facility Facility         @relation(fields: [facilityId], references: [id])
+  teams    TournamentTeam[]
+  matches  TournamentMatch[]
+
+  @@index([facilityId])
+}
+
+model TournamentTeam {
+  id            String   @id @default(cuid())
+  tournamentId  String
+  customerId    String
+  teamName      String
+  players       Json?
+  contactNumber String?
+  status        String   @default("PENDING") // PENDING | CONFIRMED
+  createdAt     DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  customer   User       @relation(fields: [customerId], references: [id])
+
+  @@index([tournamentId])
+  @@index([customerId])
+}
+
+model TournamentMatch {
+  id           String    @id @default(cuid())
+  tournamentId String
+  round        Int       @default(1)
+  teamAId      String?
+  teamBId      String?
+  matchDate    DateTime?
+  status       String    @default("SCHEDULED") // SCHEDULED | PLAYED
+  result       Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@index([tournamentId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  facilityId  String
+  amount      Int
+  category    String // ELECTRICITY | STAFF_SALARY | CLEANING | MAINTENANCE | EQUIPMENT | MARKETING | RENT | REPAIR | INTERNET | OTHER
+  date        DateTime
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+
+  @@index([facilityId, date])
+  @@index([facilityId, category])
+}
+
+model Blacklist {
+  id         String   @id @default(cuid())
+  facilityId String
+  customerId String?
+  teamName   String?
+  category   String // REPEATED_NO_SHOW | PAYMENT_FRAUD | MISCONDUCT | PROPERTY_DAMAGE | VERBAL_ABUSE
+  reason     String?
+  addedBy    String?
+  createdAt  DateTime @default(now())
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+  customer User?    @relation(fields: [customerId], references: [id])
+  adder    User?    @relation("AddedBy", fields: [addedBy], references: [id])
+
+  @@index([facilityId, customerId])
+  @@index([facilityId])
+}
+
+model Maintenance {
+  id         String   @id @default(cuid())
+  facilityId String
+  resourceId String
+  date       DateTime
+  note       String?
+  status     String   @default("SCHEDULED") // SCHEDULED | DONE
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+  resource Resource @relation(fields: [resourceId], references: [id])
+
+  @@index([resourceId, date])
+  @@index([facilityId, date])
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  mobile    String
+  code      String
+  purpose   String // LOGIN | BOOKING
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([mobile, purpose, createdAt(sort: Desc)])
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  facilityId String?
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+
+  facility Facility? @relation(fields: [facilityId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+
+  @@index([facilityId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  facilityId String?
+  userId     String
+  event      String
+  title      String
+  message    String?
+  payload    Json?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  facility Facility? @relation(fields: [facilityId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@index([facilityId, createdAt(sort: Desc)])
+}
+
+model ScheduledReport {
+  id         String    @id @default(cuid())
+  facilityId String
+  frequency  String
+  recipients Json
+  enabled    Boolean   @default(true)
+  lastRunAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+
+  @@index([facilityId])
   @@index([enabled, lastRunAt])
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
 }

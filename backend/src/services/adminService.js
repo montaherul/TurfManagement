@@ -1,129 +1,102 @@
-import { AppError } from '../utils/ApiError.js';
-import { hashPassword } from '../utils/auth.js';
+import { prisma } from '../config/db.js';
 
-const ROLES = ['super_admin', 'org_admin', 'inspector', 'viewer'];
+const DEFAULT_SETTINGS = {
+  platformFee: 15,
+  smsProvider: '',
+  refundNoticeHours: 24,
+};
 
 export const createAdminService = ({
-  userRepository,
+  facilityService,
   userListRepository,
-  fieldListRepository,
-  organizationRepository,
-  organizationListRepository,
+  systemSettingRepository,
   auditLogRepository,
-  auditLogListRepository,
-  planLimitService,
 }) => {
-  const getSystemHealth = async () => {
+  const listFacilities = (params) => facilityService.listAll(params);
+
+  const getFacility = (facilityId) => facilityService.getById(facilityId);
+
+  const approveApplication = (params) => facilityService.approveApplication(params);
+
+  const rejectApplication = (params) => facilityService.rejectApplication(params);
+
+  const setFacilityStatus = (params) => facilityService.setStatus(params);
+
+  const listCustomers = async ({ page, limit, search, sort }) => {
+    const result = await userListRepository.list({
+      page,
+      limit,
+      search,
+      sort,
+      filters: { role: 'booker' },
+    });
+    return result;
+  };
+
+  const feeSummary = async () => {
+    const [total, byFacility, byDate] = await Promise.all([
+      prisma.payment.aggregate({
+        where: { status: { in: ['VERIFIED', 'REFUNDED'] } },
+        _sum: { platformFee: true },
+        _count: true,
+      }),
+      prisma.payment.groupBy({
+        by: ['facilityId'],
+        where: { status: { in: ['VERIFIED', 'REFUNDED'] } },
+        _sum: { platformFee: true },
+        _count: true,
+      }),
+      prisma.payment.groupBy({
+        by: ['status'],
+        _sum: { platformFee: true },
+        _count: true,
+      }),
+    ]);
     return {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
-      nodeVersion: process.version,
-      platform: process.platform,
-      environment: process.env.NODE_ENV,
+      totalFees: total._sum.platformFee || 0,
+      totalPayments: total._count,
+      byFacility,
+      byStatus: byDate,
     };
   };
 
-  const listUsers = (params) => userListRepository.list(params);
+  const getSettings = async () => {
+    const keys = Object.keys(DEFAULT_SETTINGS);
+    const rows = await Promise.all(keys.map((key) => systemSettingRepository.get(key)));
+    const settings = {};
+    keys.forEach((key, i) => {
+      settings[key] = rows[i] ?? DEFAULT_SETTINGS[key];
+    });
+    return settings;
+  };
 
-  /**
-   * Creates a user. org_admins can only create within their own organization
-   * (plan limit enforced). super_admins can target any organization.
-   */
-  const createUser = async ({ actorRole, actorOrganizationId, data, ipAddress }) => {
-    const role = data.role || 'inspector';
-    if (!ROLES.includes(role)) {
-      throw new AppError(422, `Invalid role: ${role}`, { code: 'INVALID_ROLE' });
-    }
-    if (role === 'super_admin' && actorRole !== 'super_admin') {
-      throw new AppError(403, 'Only super admins can create super admins', { code: 'FORBIDDEN' });
-    }
-
-    const organizationId = actorRole === 'super_admin'
-      ? data.organizationId || null
-      : actorOrganizationId;
-
-    if (organizationId) {
-      await planLimitService.assertWithinLimits(organizationId, 'users');
-      const org = await organizationRepository.findById(organizationId);
-      if (!org) {
-        throw new AppError(404, 'Organization not found', { code: 'NOT_FOUND' });
+  const setSettings = async ({ settings, actorId, ipAddress }) => {
+    const updated = {};
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (settings[key] !== undefined) {
+        updated[key] = await systemSettingRepository.set(key, settings[key]);
       }
     }
-
-    const existing = await userRepository.findByEmailPublic(data.email);
-    if (existing) {
-      throw new AppError(409, 'User with this email already exists', { code: 'EMAIL_TAKEN' });
-    }
-
-    const passwordHash = await hashPassword(data.password || 'Password123!');
-    const user = await userRepository.create({
-      email: data.email,
-      passwordHash,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      role,
-      organizationId,
-      isActive: data.isActive !== false,
-      notificationPreferences: { email: true, inApp: true, sms: false },
-    });
-
     await auditLogRepository.create({
-      organizationId,
-      userId: data.actorId || null,
-      action: 'user.create',
-      resource: 'user',
-      resourceId: user.id,
-      details: { email: user.email, role: user.role },
+      userId: actorId,
+      action: 'admin.settings.update',
+      resource: 'settings',
+      details: { keys: Object.keys(updated) },
       ipAddress: ipAddress || null,
     });
-
-    return user;
-  };
-
-  const listFields = (params) => fieldListRepository.list(params);
-
-  const listAuditLogs = (params) => auditLogListRepository.list(params);
-
-  const listOrganizations = (params) => organizationListRepository.list(params);
-
-  const getOrganization = async (id) => {
-    const org = await organizationRepository.findById(id);
-    if (!org) {
-      throw new AppError(404, 'Organization not found', { code: 'NOT_FOUND' });
-    }
-    return org;
-  };
-
-  const updateOrganization = async (id, data) => {
-    const org = await organizationRepository.findById(id);
-    if (!org) {
-      throw new AppError(404, 'Organization not found', { code: 'NOT_FOUND' });
-    }
-    return organizationRepository.update(id, data);
-  };
-
-  const suspendOrganization = async (id, { suspended }) => {
-    const org = await organizationRepository.findById(id);
-    if (!org) {
-      throw new AppError(404, 'Organization not found', { code: 'NOT_FOUND' });
-    }
-    const settings = { ...(org.settings || {}), suspended: Boolean(suspended) };
-    await organizationRepository.update(id, { settings });
-    return { ...org, settings };
+    return updated;
   };
 
   return {
-    getSystemHealth,
-    listUsers,
-    createUser,
-    listFields,
-    listAuditLogs,
-    listOrganizations,
-    getOrganization,
-    updateOrganization,
-    suspendOrganization,
+    listFacilities,
+    getFacility,
+    approveApplication,
+    rejectApplication,
+    setFacilityStatus,
+    listCustomers,
+    feeSummary,
+    getSettings,
+    setSettings,
   };
 };
 

@@ -26,29 +26,20 @@ export const env = {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || (15 * 60 * 1000), 10),
   },
   uploadDir: process.env.UPLOAD_DIR || './uploads',
-  sslcommerz: {
-    storeId: process.env.SSLCOMMERZ_STORE_ID || '',
-    storePassword: process.env.SSLCOMMERZ_STORE_PASSWORD || '',
-    isLive: (process.env.SSLCOMMERZ_IS_LIVE || 'false') === 'true',
-  },
-  bkash: {
-    appKey: process.env.BKASH_APP_KEY || '',
-    appSecret: process.env.BKASH_APP_SECRET || '',
-    sandbox: (process.env.BKASH_SANDBOX || 'true') === 'true',
-  },
-  nagad: {
-    merchantId: process.env.NAGAD_MERCHANT_ID || '',
-    secretKey: process.env.NAGAD_SECRET_KEY || '',
-    sandbox: (process.env.NAGAD_SANDBOX || 'true') === 'true',
-  },
   sendgrid: {
     apiKey: process.env.SENDGRID_API_KEY || '',
-    fromEmail: process.env.SENDGRID_FROM_EMAIL || 'no-reply@turfcarebd.com',
+    fromEmail: process.env.SENDGRID_FROM_EMAIL || 'no-reply@turfbookbd.com',
+  },
+  sms: {
+    provider: process.env.SMS_PROVIDER || '',
+    apiKey: process.env.SMS_API_KEY || '',
+    senderId: process.env.SMS_SENDER_ID || '',
+  },
+  schedulers: {
+    enabled: process.env.SCHEDULERS_ENABLED !== 'false',
+    slotHour: parseInt(process.env.SLOT_SCHEDULER_HOUR || '0', 10),
   },
   isProduction: process.env.NODE_ENV === 'production',
 };
-
-export const isSslcommerzConfigured = () =>
-  Boolean(env.sslcommerz.storeId && env.sslcommerz.storePassword);
 
 export const isSendgridConfigured = () => Boolean(env.sendgrid.apiKey);
