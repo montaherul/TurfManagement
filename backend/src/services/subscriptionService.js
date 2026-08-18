@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { AppError } from '../utils/ApiError.js';
 import { env, isSslcommerzConfigured } from '../config/env.js';
 import { getPlan } from './planLimitService.js';
+import { createBkashService } from './bkashService.js';
+import { createNagadService } from './nagadService.js';
 
 const CHECKOUT_SUCCESS_URL = '/payment/success';
 const CHECKOUT_FAIL_URL = '/payment/fail';
@@ -22,6 +24,8 @@ export const createSubscriptionService = ({
   paymentService,
   logger,
 }) => {
+  const bkash = createBkashService({ subscriptionRepository, organizationRepository, auditLogRepository, notificationService, logger });
+  const nagad = createNagadService({ subscriptionRepository, organizationRepository, auditLogRepository, notificationService, logger });
   const get = async (organizationId) => {
     const subscription = await subscriptionRepository.getByOrganization(organizationId);
     if (!subscription) {
@@ -154,6 +158,60 @@ export const createSubscriptionService = ({
     return { checkoutUrl: apiResponse.GatewayPageURL, tranId, amountBDT: plan.priceBDT, planId };
   };
 
+  const createBkashCheckout = async ({ organizationId, planId, user }) => {
+    const plan = getPlan(planId);
+    if (plan.priceBDT === 0) {
+      throw new AppError(400, 'Free plan does not require checkout', { code: 'INVALID_PLAN' });
+    }
+
+    const result = await bkash.createPayment({ organizationId, planId, user, amountBDT: plan.priceBDT });
+
+    await subscriptionRepository.upsertByOrganization(organizationId, {
+      planId,
+      status: 'pending',
+      billingModel: 'pay_per_inspection',
+      amountBDT: plan.priceBDT,
+      currency: 'BDT',
+      paymentMethod: { gateway: 'bkash', paymentId: result.paymentId, invoiceNo: result.invoiceNo },
+    });
+
+    await auditLogRepository.create({
+      organizationId,
+      action: 'subscription.bkash_checkout_init',
+      resource: 'subscription',
+      details: { planId, paymentId: result.paymentId, amount: plan.priceBDT },
+    });
+
+    return result;
+  };
+
+  const createNagadCheckout = async ({ organizationId, planId, user }) => {
+    const plan = getPlan(planId);
+    if (plan.priceBDT === 0) {
+      throw new AppError(400, 'Free plan does not require checkout', { code: 'INVALID_PLAN' });
+    }
+
+    const result = await nagad.createPayment({ organizationId, planId, user, amountBDT: plan.priceBDT });
+
+    await subscriptionRepository.upsertByOrganization(organizationId, {
+      planId,
+      status: 'pending',
+      billingModel: 'pay_per_inspection',
+      amountBDT: plan.priceBDT,
+      currency: 'BDT',
+      paymentMethod: { gateway: 'nagad', paymentId: result.paymentId, invoiceNo: result.invoiceNo },
+    });
+
+    await auditLogRepository.create({
+      organizationId,
+      action: 'subscription.nagad_checkout_init',
+      resource: 'subscription',
+      details: { planId, paymentId: result.paymentId, amount: plan.priceBDT },
+    });
+
+    return result;
+  };
+
   /**
    * SSLCommerz IPN webhook handler. Validates the transaction via the
    * transaction query API, verifies the amount matches the plan and the
@@ -268,6 +326,114 @@ export const createSubscriptionService = ({
     return { ok: true, subscription, planId: resolvedPlan };
   };
 
+  const handleBkashCallback = async (body) => {
+    const { paymentID, status } = body || {};
+    if (!paymentID || status !== 'success') {
+      return { ok: false, reason: 'payment_not_completed' };
+    }
+
+    const execution = await bkash.executePayment(paymentID);
+    const orgId = execution.value_a;
+    const planId = execution.value_b || 'basic';
+    const plan = getPlan(planId);
+
+    const subscription = await subscriptionRepository.upsertByOrganization(orgId, {
+      planId,
+      status: 'active',
+      billingModel: 'pay_per_inspection',
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * DAY_MS),
+      nextBillingDate: new Date(Date.now() + 30 * DAY_MS),
+      gracePeriodEnd: null,
+      inspectionsUsed: 0,
+      inspectionsLimit: Number.isFinite(plan.inspections) ? plan.inspections : null,
+      amountBDT: plan.priceBDT,
+      currency: 'BDT',
+      paymentMethod: { gateway: 'bkash', paymentId: paymentID, tranId: execution.trxID },
+    });
+
+    await organizationRepository.update(orgId, {
+      subscription: { planId, billingModel: 'pay_per_inspection' },
+    });
+
+    if (paymentService) {
+      const { payment, created } = await paymentService.recordPaidPayment({
+        organizationId: orgId,
+        tranId: paymentID,
+        planId,
+        amountBDT: plan.priceBDT,
+        paymentMethod: { gateway: 'bkash', paymentId: paymentID, trxId: execution.trxID },
+      });
+      if (created && notificationService) {
+        notificationService.notifyOrganization(orgId, 'invoice:generated', { invoiceNo: payment.invoiceNo, tranId: paymentID, amount: payment.amountBDT, planId }, { action: 'invoice.generated_notified' });
+      }
+    }
+
+    await auditLogRepository.create({
+      organizationId: orgId,
+      action: 'subscription.bkash_activated',
+      resource: 'subscription',
+      resourceId: subscription.id,
+      details: { planId, paymentId: paymentID, amount: plan.priceBDT },
+    });
+
+    return { ok: true, subscription, planId };
+  };
+
+  const handleNagadCallback = async (body) => {
+    const { invoiceNo } = body || {};
+    if (!invoiceNo) {
+      return { ok: false, reason: 'missing_invoice' };
+    }
+
+    const validation = await nagad.verifyPayment(invoiceNo);
+    const orgId = validation.value_a;
+    const planId = validation.value_b || 'basic';
+    const plan = getPlan(planId);
+
+    const subscription = await subscriptionRepository.upsertByOrganization(orgId, {
+      planId,
+      status: 'active',
+      billingModel: 'pay_per_inspection',
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * DAY_MS),
+      nextBillingDate: new Date(Date.now() + 30 * DAY_MS),
+      gracePeriodEnd: null,
+      inspectionsUsed: 0,
+      inspectionsLimit: Number.isFinite(plan.inspections) ? plan.inspections : null,
+      amountBDT: plan.priceBDT,
+      currency: 'BDT',
+      paymentMethod: { gateway: 'nagad', invoiceNo, paymentReferenceId: validation.paymentReferenceId },
+    });
+
+    await organizationRepository.update(orgId, {
+      subscription: { planId, billingModel: 'pay_per_inspection' },
+    });
+
+    if (paymentService) {
+      const { payment, created } = await paymentService.recordPaidPayment({
+        organizationId: orgId,
+        tranId: invoiceNo,
+        planId,
+        amountBDT: plan.priceBDT,
+        paymentMethod: { gateway: 'nagad', invoiceNo, paymentReferenceId: validation.paymentReferenceId },
+      });
+      if (created && notificationService) {
+        notificationService.notifyOrganization(orgId, 'invoice:generated', { invoiceNo: payment.invoiceNo, tranId: invoiceNo, amount: payment.amountBDT, planId }, { action: 'invoice.generated_notified' });
+      }
+    }
+
+    await auditLogRepository.create({
+      organizationId: orgId,
+      action: 'subscription.nagad_activated',
+      resource: 'subscription',
+      resourceId: subscription.id,
+      details: { planId, invoiceNo, amount: plan.priceBDT },
+    });
+
+    return { ok: true, subscription, planId };
+  };
+
   /**
    * Billing state machine sweep. Runs on a scheduler:
    * active → past_due (7-day grace) → downgraded to free.
@@ -343,7 +509,7 @@ export const createSubscriptionService = ({
     return { markedPastDue, downgraded };
   };
 
-  return { get, update, createCheckoutSession, handleIpn, runBillingCycle };
+  return { get, update, createCheckoutSession, createBkashCheckout, createNagadCheckout, handleBkashCallback, handleNagadCallback, handleIpn, runBillingCycle };
 };
 
 export default createSubscriptionService;

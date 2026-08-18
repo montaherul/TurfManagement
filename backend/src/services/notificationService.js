@@ -57,13 +57,49 @@ const buildEmailText = (event, payload) => {
   }
 };
 
+const NOTIFICATION_TITLES = {
+  'work_order:created': (payload) => `New work order: ${payload.title || payload.code || 'Maintenance required'}`,
+  'work_order:assigned': (payload) => `Work order assigned to you: ${payload.title || payload.code || ''}`,
+  'inspection:submitted': (payload) => `Inspection submitted (PQS ${payload.score ?? '—'})`,
+  'inspection:verified': () => 'Inspection verified',
+  'subscription:past_due': () => 'Subscription payment overdue',
+  'subscription:downgraded': () => 'Subscription downgraded to Free',
+  'invoice:generated': (payload) => `Payment received — Invoice ${payload.invoiceNo || ''}`,
+  'field:threshold_breach': (payload) => `Score alert: ${payload.fieldName || 'A field'} fell below threshold`,
+};
+
+const NOTIFICATION_MESSAGES = {
+  'work_order:created': (payload) =>
+    `A new work order (${payload.code || ''}) was created with ${payload.priority || 'medium'} priority.`,
+  'work_order:assigned': (payload) =>
+    `You have been assigned to work order ${payload.code || ''}.`,
+  'inspection:submitted': (payload) =>
+    `Inspection ${payload.inspectionId || ''} was submitted for review with a pitch quality score of ${payload.score ?? '—'}.`,
+  'inspection:verified': () => 'An inspection you submitted has been verified.',
+  'subscription:past_due': () =>
+    'Your subscription payment is overdue. Your plan will be downgraded after the 7-day grace period.',
+  'subscription:downgraded': () => 'Your subscription has been downgraded to the Free plan.',
+  'invoice:generated': (payload) =>
+    `Your payment of BDT ${payload.amount ?? ''} (invoice ${payload.invoiceNo || ''}) has been received.`,
+  'field:threshold_breach': (payload) =>
+    `${payload.fieldName || 'A field'} scored ${payload.score ?? '—'} (${payload.tier || ''}), below the ${payload.threshold ?? '—'} threshold.`,
+};
+
+const titleFor = (event, payload) => {
+  const fn = NOTIFICATION_TITLES[event];
+  return fn ? fn(payload || {}) : `TurfCare BD: ${event.replace(/[:._-]+/g, ' ')}`;
+};
+
+const messageFor = (event, payload) => {
+  const fn = NOTIFICATION_MESSAGES[event];
+  return fn ? fn(payload || {}) : null;
+};
+
 /**
- * In-app notification service — writes an audit log entry and emits a socket
- * event to the organization room (and optionally the affected user room).
- * Email notifications are sent to the organization's admins when the event
- * carries an email subject (SendGrid, console fallback when unconfigured).
+ * Notification service — in-app notifications (persisted rows + socket emit)
+ * and email notifications (SendGrid, console fallback when unconfigured).
  */
-export const createNotificationService = ({ auditLogRepository, logger, userRepository }) => {
+export const createNotificationService = ({ auditLogRepository, logger, userRepository, notificationRepository }) => {
   const emailOrganizationAdmins = async (organizationId, event, payload) => {
     if (!EMAIL_SUBJECTS[event]) return;
     try {
@@ -81,6 +117,27 @@ export const createNotificationService = ({ auditLogRepository, logger, userRepo
       );
     } catch (err) {
       logger.warn(`Failed to email organization admins: ${err.message}`);
+    }
+  };
+
+  const persistForOrganization = async (organizationId, event, payload) => {
+    try {
+      const users = await userRepository.findMany({ organizationId, isActive: true });
+      if (!users.length) return;
+      const rows = users.map((user) => ({
+        organizationId,
+        userId: user.id,
+        event,
+        title: titleFor(event, payload),
+        message: messageFor(event, payload),
+        payload,
+      }));
+      const { count } = await notificationRepository.createMany(rows);
+      if (count > 0) {
+        emitToOrganization(organizationId, 'notifications:new', { event });
+      }
+    } catch (err) {
+      logger.warn(`Failed to persist in-app notifications: ${err.message}`);
     }
   };
 
@@ -104,6 +161,8 @@ export const createNotificationService = ({ auditLogRepository, logger, userRepo
       logger.warn(`Failed to persist notification audit log: ${err.message}`);
     }
 
+    await persistForOrganization(organizationId, event, payload);
+
     emitToOrganization(organizationId, event, {
       ...payload,
       emittedAt: new Date().toISOString(),
@@ -122,11 +181,54 @@ export const createNotificationService = ({ auditLogRepository, logger, userRepo
   };
 
   const notifyUser = async (userId, event, payload = {}) => {
+    try {
+      await notificationRepository.createMany([
+        {
+          organizationId: payload.organizationId || null,
+          userId,
+          event,
+          title: titleFor(event, payload),
+          message: messageFor(event, payload),
+          payload,
+        },
+      ]);
+    } catch (err) {
+      logger.warn(`Failed to persist user notification: ${err.message}`);
+    }
     emitToUser(userId, event, { ...payload, emittedAt: new Date().toISOString() });
+    emitToUser(userId, 'notifications:new', { event });
     return true;
   };
 
-  return { notifyOrganization, notifyUser };
+  const listForUser = async ({ userId, page, limit }) => {
+    const result = await notificationRepository.listForUser({ userId, page, limit });
+    const unread = await notificationRepository.unreadCount(userId);
+    return { ...result, unread };
+  };
+
+  const unreadCount = (userId) => notificationRepository.unreadCount(userId);
+
+  const markRead = async (id, userId) => {
+    const result = await notificationRepository.markRead(id, userId);
+    if (result.count === 0) return false;
+    const unread = await notificationRepository.unreadCount(userId);
+    emitToUser(userId, 'notifications:unread', { unread });
+    return true;
+  };
+
+  const markAllRead = async (userId) => {
+    await notificationRepository.markAllRead(userId);
+    const unread = await notificationRepository.unreadCount(userId);
+    emitToUser(userId, 'notifications:unread', { unread });
+    return true;
+  };
+
+  const clearRead = async (userId) => {
+    await notificationRepository.deleteRead(userId);
+    return true;
+  };
+
+  return { notifyOrganization, notifyUser, listForUser, unreadCount, markRead, markAllRead, clearRead };
 };
 
 export default createNotificationService;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { X, AlertTriangle, Inbox, RefreshCw } from 'lucide-react';
 
 const Button = ({ children, variant = 'primary', size = 'md', loading, disabled, fullWidth, className = '', ...props }) => {
@@ -35,61 +35,76 @@ const Button = ({ children, variant = 'primary', size = 'md', loading, disabled,
   );
 };
 
-const Input = ({ label, error, className = '', ...props }) => (
-  <div className={className}>
-    {label && (
-      <label className="block text-sm font-medium text-slate-700 mb-2">
-        {label}
-        {props.required && <span className="text-red-500 ml-1">*</span>}
-      </label>
-    )}
-    <input
-      className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all ${
-        error ? 'border-red-300 focus:ring-red-500' : 'border-slate-200'
-      }`}
-      {...props}
-    />
-    {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-  </div>
-);
+const Input = ({ label, error, className = '', id, ...props }) => {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+  return (
+    <div className={className}>
+      {label && (
+        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700 mb-2">
+          {label}
+          {props.required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
+      <input
+        id={inputId}
+        className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all ${
+          error ? 'border-red-300 focus:ring-red-500' : 'border-slate-200'
+        }`}
+        {...props}
+      />
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+    </div>
+  );
+};
 
-const Select = ({ label, error, children, className = '', ...props }) => (
-  <div className={className}>
-    {label && (
-      <label className="block text-sm font-medium text-slate-700 mb-2">
-        {label}
-        {props.required && <span className="text-red-500 ml-1">*</span>}
-      </label>
-    )}
-    <select
-      className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all bg-white ${
-        error ? 'border-red-300 focus:ring-red-500' : 'border-slate-200'
-      }`}
-      {...props}
-    >
-      {children}
-    </select>
-    {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-  </div>
-);
+const Select = ({ label, error, children, className = '', id, ...props }) => {
+  const generatedId = useId();
+  const selectId = id || generatedId;
+  return (
+    <div className={className}>
+      {label && (
+        <label htmlFor={selectId} className="block text-sm font-medium text-slate-700 mb-2">
+          {label}
+          {props.required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
+      <select
+        id={selectId}
+        className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all bg-white ${
+          error ? 'border-red-300 focus:ring-red-500' : 'border-slate-200'
+        }`}
+        {...props}
+      >
+        {children}
+      </select>
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+    </div>
+  );
+};
 
-const TextArea = ({ label, error, className = '', ...props }) => (
-  <div className={className}>
-    {label && (
-      <label className="block text-sm font-medium text-slate-700 mb-2">
-        {label}
-        {props.required && <span className="text-red-500 ml-1">*</span>}
-      </label>
-    )}
-    <textarea
-      className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all ${
-        error ? 'border-red-300 focus:ring-red-500' : 'border-slate-200'
-      }`}
-      {...props}
-    />
-    {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-  </div>
-);
+const TextArea = ({ label, error, className = '', id, ...props }) => {
+  const generatedId = useId();
+  const areaId = id || generatedId;
+  return (
+    <div className={className}>
+      {label && (
+        <label htmlFor={areaId} className="block text-sm font-medium text-slate-700 mb-2">
+          {label}
+          {props.required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
+      <textarea
+        id={areaId}
+        className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all ${
+          error ? 'border-red-300 focus:ring-red-500' : 'border-slate-200'
+        }`}
+        {...props}
+      />
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+    </div>
+  );
+};
 
 const Card = ({ children, className = '', padding = true }) => (
   <div className={`bg-white rounded-2xl shadow-card ${padding ? 'p-6' : ''} ${className}`}>

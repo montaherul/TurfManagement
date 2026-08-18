@@ -27,6 +27,8 @@ model Organization {
   auditLogs      AuditLog[]
   rolePermissions RolePermission[]
   payments       Payment[]
+  notifications  Notification[]
+  scheduledReports ScheduledReport[]
 }
 
 model User {
@@ -50,6 +52,7 @@ model User {
   assignedWorkOrders   WorkOrder[]    @relation("Assignee")
   auditLogs            AuditLog[]
   userPermissions      UserPermission[]
+  notifications        Notification[]
 
   @@index([organizationId, role])
   @@index([organizationId, isActive])
@@ -234,4 +237,38 @@ model Payment {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, createdAt(sort: Desc)])
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  organizationId String?
+  userId         String
+  event          String
+  title          String
+  message        String?
+  payload        Json?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@index([organizationId, createdAt(sort: Desc)])
+}
+
+model ScheduledReport {
+  id             String    @id @default(cuid())
+  organizationId String
+  frequency      String
+  recipients     Json
+  enabled        Boolean   @default(true)
+  lastRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([enabled, lastRunAt])
 }

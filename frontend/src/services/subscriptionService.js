@@ -16,6 +16,14 @@ export const subscriptionService = {
     const response = await api.post('/subscriptions/checkout', { planId });
     return response.data.data;
   },
+  createBkashCheckout: async (planId) => {
+    const response = await api.post('/subscriptions/checkout/bkash', { planId });
+    return response.data.data;
+  },
+  createNagadCheckout: async (planId) => {
+    const response = await api.post('/subscriptions/checkout/nagad', { planId });
+    return response.data.data;
+  },
 };
 
 export default subscriptionService;

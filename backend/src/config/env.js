@@ -31,6 +31,16 @@ export const env = {
     storePassword: process.env.SSLCOMMERZ_STORE_PASSWORD || '',
     isLive: (process.env.SSLCOMMERZ_IS_LIVE || 'false') === 'true',
   },
+  bkash: {
+    appKey: process.env.BKASH_APP_KEY || '',
+    appSecret: process.env.BKASH_APP_SECRET || '',
+    sandbox: (process.env.BKASH_SANDBOX || 'true') === 'true',
+  },
+  nagad: {
+    merchantId: process.env.NAGAD_MERCHANT_ID || '',
+    secretKey: process.env.NAGAD_SECRET_KEY || '',
+    sandbox: (process.env.NAGAD_SANDBOX || 'true') === 'true',
+  },
   sendgrid: {
     apiKey: process.env.SENDGRID_API_KEY || '',
     fromEmail: process.env.SENDGRID_FROM_EMAIL || 'no-reply@turfcarebd.com',

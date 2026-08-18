@@ -211,8 +211,7 @@ describe('TurfCare BD API Ã¢â‚¬â€ integration (auth, tenant isolation
   });
 
   it('submits, verifies and deletes an inspection through the workflow', async () => {
-    const inspectorToken = await login('inspector-a@test.dev');
-    const created = await request(app)
+    const inspectorToken = await login('inspector-a@test.dev');    const created = await request(app)
       .post('/api/inspections')
       .set(auth(inspectorToken))
       .send({ fieldId: ctx.fieldA.id })

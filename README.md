@@ -10,9 +10,12 @@ A modern, enterprise-grade SaaS platform for sports field turf management and in
 - Pitch Quality Score (PQS) engine with configurable weights
 - Maintenance work order management with auto-generation from inspections
 - Comprehensive reporting and analytics (PDF + CSV)
-- Bangladesh payment gateway integration (SSLCommerz)
-- Tier-based subscription limits (Free / Basic / Professional)
-- Real-time notifications via Socket.io
+- Bangladesh payment gateways (SSLCommerz, bKash, Nagad)
+- Tier-based subscription limits (Free / Pro / Enterprise)
+- Real-time notifications via Socket.io (bell + dropdown)
+- Scheduled email reports (daily / weekly / monthly)
+- PWA baseline (manifest + service worker, installable)
+- English / Bangla (বাংলা) i18n toggle
 - Responsive web app with Tailwind CSS
 
 ## Tech Stack
@@ -168,9 +171,44 @@ Base URL: `/api`
 ### Subscriptions & Payments
 - `GET /api/subscriptions` — Get current subscription
 - `POST /api/subscriptions/checkout` — Create SSLCommerz checkout
+- `POST /api/subscriptions/checkout/bkash` — Create bKash checkout
+- `POST /api/subscriptions/checkout/nagad` — Create Nagad checkout
 - `GET /api/payments/invoice/:tranId` — Get invoice
 - `GET /api/payments/invoice/:tranId/pdf` — Download invoice PDF
 - `POST /api/payments/sslcommerz-ipn` — SSLCommerz webhook
+
+### Notifications
+- `GET /api/notifications` — List my notifications (paginated)
+- `GET /api/notifications/unread-count` — Unread count
+- `PUT /api/notifications/:id/read` — Mark one as read
+- `PUT /api/notifications/read-all` — Mark all as read
+- `DELETE /api/notifications/read` — Clear read notifications
+
+### Scheduled Reports
+- `GET /api/reports/schedules` — List report schedules
+- `POST /api/reports/schedules` — Create schedule (daily/weekly/monthly)
+- `PUT /api/reports/schedules/:id` — Update schedule
+- `DELETE /api/reports/schedules/:id` — Delete schedule
+
+## Vercel Deployment
+
+### Backend
+1. Import `backend/` as a Vercel project (or monorepo root with backend as root directory).
+2. Configure environment variables (from `backend/.env`):
+   - `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `FRONTEND_URL`
+   - `SSLCOMMERZ_STORE_ID`, `SSLCOMMERZ_STORE_PASSWORD`, `SSLCOMMERZ_IS_LIVE`
+   - `BKASH_APP_KEY`, `BKASH_APP_SECRET`, `BKASH_SANDBOX`
+   - `NAGAD_MERCHANT_ID`, `NAGAD_SECRET_KEY`, `NAGAD_SANDBOX`
+   - `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`
+3. Build command: `npm run build` (runs `prisma generate`); output not needed (serverless).
+4. Health check: `https://<backend-url>/api/health` must return `200`.
+   - Sockets run in serverless mode with polling fallback (`transports: ['websocket', 'polling']`).
+   - The billing and report schedulers are interval-based and therefore only run on long-running instances (VPS/Docker). For serverless, run them via an external cron hitting the endpoints or a dedicated worker instance.
+
+### Frontend
+1. Import `frontend/` with build command `npm run build` and output `dist`.
+2. Set `VITE_API_URL` to the deployed backend URL.
+3. PWA: `/manifest.webmanifest` and `/sw.js` are served from `public/` automatically.
 
 ## Testing
 

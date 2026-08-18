@@ -8,6 +8,10 @@ import authReducer from '../store/slices/authSlice';
 import permissionsReducer from '../store/slices/permissionsSlice';
 import uiReducer from '../store/slices/uiSlice';
 
+vi.mock('../utils/offlineQueue', () => ({
+  offlineQueue: { processQueue: vi.fn(() => Promise.resolve(0)) },
+}));
+
 const renderWithProviders = (ui, { preloadedState = {} } = {}) => {
   const store = configureStore({
     reducer: {
@@ -49,7 +53,8 @@ describe('Layout', () => {
   });
 
   it('shows offline banner when navigator.onLine is false', () => {
-    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true, writable: true });
+    window.dispatchEvent(new Event('offline'));
     renderWithProviders(<Layout />);
     expect(screen.getByText(/offline/i)).toBeInTheDocument();
   });

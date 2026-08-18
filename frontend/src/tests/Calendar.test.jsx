@@ -7,6 +7,11 @@ import Calendar from '../pages/workorders/Calendar';
 import authReducer from '../store/slices/authSlice';
 import permissionsReducer from '../store/slices/permissionsSlice';
 import workOrderReducer from '../store/slices/workOrderSlice';
+import { workOrderService } from '../services/workOrderService';
+
+vi.mock('../services/workOrderService', () => ({
+  workOrderService: { getCalendar: vi.fn() },
+}));
 
 const renderWithProviders = (ui, { preloadedState = {} } = {}) => {
   const store = configureStore({
@@ -36,26 +41,24 @@ const renderWithProviders = (ui, { preloadedState = {} } = {}) => {
 };
 
 describe('Calendar', () => {
-  it('renders the calendar header', () => {
+  it('renders the calendar header', async () => {
+    workOrderService.getCalendar.mockResolvedValue({ data: [] });
     renderWithProviders(<Calendar />);
-    expect(screen.getByText('Maintenance Calendar')).toBeInTheDocument();
+    expect(await screen.findByText('Maintenance Calendar')).toBeInTheDocument();
   });
 
-  it('renders month navigation buttons', () => {
+  it('renders month navigation buttons', async () => {
+    workOrderService.getCalendar.mockResolvedValue({ data: [] });
     renderWithProviders(<Calendar />);
-    expect(screen.getByLabelText(/previous month/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/previous month/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/next month/i)).toBeInTheDocument();
   });
 
   it('dispatches getCalendar on mount', async () => {
-    const mockDispatch = vi.fn();
-    vi.doMock('../store/slices/workOrderSlice', () => ({
-      getCalendar: () => ({ unwrap: () => Promise.resolve({ data: [] }) }),
-    }));
-
+    workOrderService.getCalendar.mockResolvedValue({ data: [] });
     renderWithProviders(<Calendar />);
     await waitFor(() => {
-      expect(mockDispatch).toHaveBeenCalled();
+      expect(workOrderService.getCalendar).toHaveBeenCalled();
     });
   });
 });

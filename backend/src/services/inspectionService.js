@@ -131,6 +131,18 @@ export const createInspectionService = ({
       details: { fieldId: inspection.fieldId },
     });
 
+    await notificationService.notifyOrganization(
+      organizationId,
+      'inspection:submitted',
+      {
+        inspectionId: updated.id,
+        fieldId: updated.fieldId,
+        score: updated.pitchQualityScore?.total,
+        submittedBy: actorId,
+      },
+      { actorId, ipAddress: null, action: 'inspection.submitted' }
+    );
+
     return updated;
   };
 

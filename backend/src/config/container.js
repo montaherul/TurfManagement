@@ -10,6 +10,8 @@ import { organizationRepository, organizationListRepository } from '../repositor
 import { subscriptionRepository } from '../repositories/subscriptionRepository.js';
 import { paymentRepository } from '../repositories/paymentRepository.js';
 import { auditLogRepository, auditLogListRepository } from '../repositories/auditLogRepository.js';
+import { notificationRepository } from '../repositories/notificationRepository.js';
+import { scheduledReportRepository } from '../repositories/scheduledReportRepository.js';
 import { analyticsRepository } from '../repositories/analyticsRepository.js';
 import { rolePermissionRepository, userPermissionRepository } from '../repositories/permissionRepository.js';
 
@@ -22,6 +24,7 @@ import { createSubscriptionService } from '../services/subscriptionService.js';
 import { createReportService } from '../services/reportService.js';
 import { createPlanLimitService } from '../services/planLimitService.js';
 import { createNotificationService } from '../services/notificationService.js';
+import { createScheduledReportService } from '../services/scheduledReportService.js';
 import { createAdminService } from '../services/adminService.js';
 import { createPermissionService } from '../services/permissionService.js';
 import { createPaymentService } from '../services/paymentService.js';
@@ -40,6 +43,8 @@ export const repositories = {
   payments: paymentRepository,
   auditLogs: auditLogRepository,
   auditLogList: auditLogListRepository,
+  notifications: notificationRepository,
+  scheduledReports: scheduledReportRepository,
   analytics: analyticsRepository,
   rolePermissions: rolePermissionRepository,
   userPermissions: userPermissionRepository,
@@ -49,6 +54,7 @@ const notificationService = createNotificationService({
   auditLogRepository,
   logger,
   userRepository,
+  notificationRepository,
 });
 const planLimitService = createPlanLimitService({
   subscriptionRepository,
@@ -107,6 +113,12 @@ export const services = {
     logger,
   }),
   reports: createReportService({ analyticsRepository }),
+  scheduledReports: createScheduledReportService({
+    scheduledReportRepository,
+    organizationRepository,
+    reportService: createReportService({ analyticsRepository }),
+    logger,
+  }),
   admin: createAdminService({
     userRepository,
     userListRepository,

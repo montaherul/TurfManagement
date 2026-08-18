@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Save, Bell, Globe, Shield, Palette, CreditCard, Check, Gauge } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Save, Bell, Globe, Shield, Palette, CreditCard, Check, Gauge, Smartphone, Building2, Landmark, FileText, Trash2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { updateProfile } from '../../store/slices/authSlice';
 import { getSubscription, createCheckoutSession } from '../../store/slices/organizationSlice';
+import { subscriptionService } from '../../services/subscriptionService';
 import { settingsService } from '../../services/settingsService';
 import { Button } from '../../components/ui';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
@@ -14,6 +16,12 @@ const PLANS = [
   { id: 'free', name: 'Free', price: 0, fields: 3, features: ['Up to 3 fields', 'Monthly inspections', 'Basic reports'] },
   { id: 'pro', name: 'Pro', price: 2500, fields: 15, features: ['Up to 15 fields', 'Unlimited inspections', 'Photo documentation', 'Priority support'] },
   { id: 'enterprise', name: 'Enterprise', price: 8000, fields: 'Unlimited', features: ['Unlimited fields', 'Multi-user roles', 'API access', 'Dedicated support'] },
+];
+
+const PAYMENT_METHODS = [
+  { id: 'sslcommerz', nameKey: 'settings.subscription.sslcommerz', hintKey: 'settings.subscription.sslcommerzHint', icon: Landmark },
+  { id: 'bkash', nameKey: 'settings.subscription.bkash', hintKey: 'settings.subscription.bkashHint', icon: Smartphone },
+  { id: 'nagad', nameKey: 'settings.subscription.nagad', hintKey: 'settings.subscription.nagadHint', icon: Building2 },
 ];
 
 const DEFAULT_WEIGHTS = {
@@ -34,11 +42,13 @@ const WEIGHT_FIELDS = [
 
 const Settings = () => {
   const dispatch = useDispatch();
+  const { t, i18n } = useTranslation();
   const { user } = useSelector((state) => state.auth);
   const { subscription, loading: subLoading } = useSelector((state) => state.organizations);
   const [activeTab, setActiveTab] = useState('profile');
   const [saving, setSaving] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('sslcommerz');
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [weightsLoading, setWeightsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -53,8 +63,37 @@ const Settings = () => {
     sms: false,
   });
   const [appearance, setAppearance] = useState(() => localStorage.getItem('appearance') || 'light');
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState(i18n.language || 'en');
   const [timezone, setTimezone] = useState('Asia/Dhaka');
+
+  const handleLanguageChange = (lng) => {
+    setLanguage(lng);
+    i18n.changeLanguage(lng);
+    localStorage.setItem('language', lng);
+    document.documentElement.lang = lng;
+  };
+  const [schedules, setSchedules] = useState([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({ frequency: 'weekly', recipients: '' });
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+
+  useEffect(() => {
+    if (user?.role !== 'org_admin') return;
+    let cancelled = false;
+    setSchedulesLoading(true);
+    settingsService
+      .listReportSchedules()
+      .then((result) => {
+        if (!cancelled) setSchedules(result?.data?.schedules || []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setSchedulesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role]);
 
   useEffect(() => {
     if (user?.role === 'org_admin') {
@@ -127,6 +166,54 @@ const Settings = () => {
     }
   };
 
+  const saveReportSchedule = async (e) => {
+    e.preventDefault();
+    setScheduleSaving(true);
+    try {
+      const recipients = scheduleForm.recipients
+        .split(/[\s,;]+/)
+        .map((r) => r.trim())
+        .filter(Boolean);
+      const result = await settingsService.createReportSchedule({
+        frequency: scheduleForm.frequency,
+        recipients,
+      });
+      toast.success('Report schedule created');
+      setSchedules((prev) => [...prev, result?.data?.schedule]);
+      setScheduleForm({ frequency: 'weekly', recipients: '' });
+    } catch (error) {
+      toast.error(getApiError(error, 'Failed to create schedule'));
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
+  const toggleSchedule = async (schedule) => {
+    try {
+      const result = await settingsService.updateReportSchedule(schedule.id, {
+        frequency: schedule.frequency,
+        recipients: schedule.recipients,
+        enabled: !schedule.enabled,
+      });
+      setSchedules((prev) =>
+        prev.map((s) => (s.id === schedule.id ? result?.data?.schedule || { ...s, enabled: !s.enabled } : s))
+      );
+      toast.success(schedule.enabled ? 'Report schedule paused' : 'Report schedule resumed');
+    } catch (error) {
+      toast.error(getApiError(error, 'Failed to update schedule'));
+    }
+  };
+
+  const deleteSchedule = async (schedule) => {
+    try {
+      await settingsService.deleteReportSchedule(schedule.id);
+      setSchedules((prev) => prev.filter((s) => s.id !== schedule.id));
+      toast.success('Report schedule deleted');
+    } catch (error) {
+      toast.error(getApiError(error, 'Failed to delete schedule'));
+    }
+  };
+
   const setAppearancePref = (theme) => {
     setAppearance(theme);
     localStorage.setItem('appearance', theme);
@@ -139,13 +226,23 @@ const Settings = () => {
       if (planId === 'free') {
         await dispatch(updateSubscription({ planId })).unwrap();
         toast.success(`Switched to Free plan`);
+        return;
+      }
+
+      let session;
+      if (paymentMethod === 'bkash') {
+        session = await subscriptionService.createBkashCheckout(planId);
+      } else if (paymentMethod === 'nagad') {
+        session = await subscriptionService.createNagadCheckout(planId);
       } else {
-        const session = await dispatch(createCheckoutSession(planId)).unwrap();
-        if (session?.checkoutUrl) {
-          window.location.href = session.checkoutUrl;
-        } else {
-          toast.error('Checkout URL not received');
-        }
+        session = await dispatch(createCheckoutSession(planId)).unwrap();
+      }
+
+      const url = session?.bkashURL || session?.nagadURL || session?.checkoutUrl;
+      if (url) {
+        window.location.href = url;
+      } else {
+        toast.error('Checkout URL not received');
       }
     } catch (error) {
       toast.error(getApiError(error, 'Failed to start checkout'));
@@ -155,14 +252,15 @@ const Settings = () => {
   };
 
   const TABS = [
-    { id: 'profile', label: 'Profile', icon: Shield },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'language', label: 'Language', icon: Globe },
+    { id: 'profile', label: t('settings.tabs.profile'), icon: Shield },
+    { id: 'notifications', label: t('settings.tabs.notifications'), icon: Bell },
+    { id: 'appearance', label: t('settings.tabs.appearance'), icon: Palette },
+    { id: 'language', label: t('settings.tabs.language'), icon: Globe },
     ...(user?.role === 'org_admin'
       ? [
-          { id: 'scoring', label: 'Scoring', icon: Gauge },
-          { id: 'subscription', label: 'Subscription', icon: CreditCard },
+          { id: 'scoring', label: t('settings.tabs.scoring'), icon: Gauge },
+          { id: 'reports', label: t('settings.tabs.reports'), icon: FileText },
+          { id: 'subscription', label: t('settings.tabs.subscription'), icon: CreditCard },
         ]
       : []),
   ];
@@ -304,22 +402,28 @@ const Settings = () => {
 
           {activeTab === 'language' && (
             <div className="space-y-6 max-w-2xl">
-              <h3 className="text-lg font-semibold text-slate-900">Language & Region</h3>
+              <h3 className="text-lg font-semibold text-slate-900">{t('settings.language.title')}</h3>
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Language</label>
+                  <label htmlFor="language-select" className="block text-sm font-medium text-slate-700 mb-2">
+                    {t('settings.language.language')}
+                  </label>
                   <select
+                    id="language-select"
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
+                    onChange={(e) => handleLanguageChange(e.target.value)}
                     className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none bg-white"
                   >
-                    <option value="en">English</option>
-                    <option value="bn">বাংলা (Bangla)</option>
+                    <option value="en">{t('settings.language.english')}</option>
+                    <option value="bn">{t('settings.language.bangla')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Timezone</label>
+                  <label htmlFor="timezone-select" className="block text-sm font-medium text-slate-700 mb-2">
+                    {t('settings.language.timezone')}
+                  </label>
                   <select
+                    id="timezone-select"
                     value={timezone}
                     onChange={(e) => setTimezone(e.target.value)}
                     className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none bg-white"
@@ -330,10 +434,10 @@ const Settings = () => {
                 </div>
                 <Button
                   variant="secondary"
-                  onClick={() => toast.success('Preferences saved')}
+                  onClick={() => toast.success(t('settings.language.preferencesSaved'))}
                 >
                   <Save className="w-4 h-4 mr-2" />
-                  Save Preferences
+                  {t('settings.language.savePreferences')}
                 </Button>
               </div>
             </div>
@@ -383,6 +487,104 @@ const Settings = () => {
             </div>
           )}
 
+          {activeTab === 'reports' && (
+            <div className="space-y-6 max-w-3xl">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Scheduled Reports</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  TurfCare BD emails an analytics summary on a regular schedule. Add up to one schedule per
+                  frequency.
+                </p>
+              </div>
+
+              <form onSubmit={saveReportSchedule} className="p-5 bg-slate-50 rounded-xl space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="schedule-frequency" className="block text-sm font-medium text-slate-700 mb-2">
+                      Frequency
+                    </label>
+                    <select
+                      id="schedule-frequency"
+                      value={scheduleForm.frequency}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, frequency: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-500 outline-none"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="schedule-recipients" className="block text-sm font-medium text-slate-700 mb-2">
+                      Recipient emails
+                    </label>
+                    <input
+                      id="schedule-recipients"
+                      type="text"
+                      value={scheduleForm.recipients}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, recipients: e.target.value })}
+                      placeholder="manager@club.com, owner@club.com"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none"
+                    />
+                  </div>
+                </div>
+                <Button type="submit" loading={scheduleSaving}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Schedule
+                </Button>
+              </form>
+
+              {schedulesLoading ? (
+                <LoadingSpinner text="Loading report schedules…" />
+              ) : schedules.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-8 bg-white rounded-xl border border-slate-100">
+                  No report schedules yet. Create one above to start receiving email reports.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {schedules.map((schedule) => (
+                    <div
+                      key={schedule.id}
+                      className="flex items-center justify-between gap-4 p-4 bg-white border border-slate-100 rounded-xl"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 capitalize">{schedule.frequency} report</p>
+                        <p className="text-sm text-slate-500 truncate">
+                          {(schedule.recipients || []).join(', ')}
+                        </p>
+                        {schedule.lastRunAt && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            Last sent {new Date(schedule.lastRunAt).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => toggleSchedule(schedule)}
+                          aria-label={`${schedule.enabled ? 'Pause' : 'Resume'} schedule`}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                            schedule.enabled
+                              ? 'bg-success-50 text-success-600 hover:bg-success-100'
+                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                          }`}
+                        >
+                          {schedule.enabled ? 'Active' : 'Paused'}
+                        </button>
+                        <button
+                          onClick={() => deleteSchedule(schedule)}
+                          aria-label="Delete schedule"
+                          className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'subscription' && (
             <div className="space-y-6 max-w-4xl">
               {subLoading && !subscription ? (
@@ -427,6 +629,43 @@ const Settings = () => {
                       )}
                     </div>
                   </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-700 mb-2">{t('settings.subscription.paymentMethod')}</h4>
+                    <p className="text-xs text-slate-500 mb-3">
+                      {t('settings.subscription.paymentMethodHint')}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {PAYMENT_METHODS.map((method) => {
+                      const isSelected = paymentMethod === method.id;
+                      return (
+                        <button
+                          key={method.id}
+                          type="button"
+                          onClick={() => setPaymentMethod(method.id)}
+                          aria-pressed={isSelected}
+                          className={`p-4 rounded-xl border-2 text-left transition-all ${
+                            isSelected
+                              ? 'border-primary-500 bg-primary-50'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <method.icon
+                              className={`w-5 h-5 ${isSelected ? 'text-primary-600' : 'text-slate-400'}`}
+                            />
+                            <div>
+                              <p className={`font-medium ${isSelected ? 'text-primary-700' : 'text-slate-700'}`}>
+                                {t(method.nameKey)}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">{t(method.hintKey)}</p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {PLANS.map((plan) => {
                       const isCurrent = plan.id === currentPlanId;

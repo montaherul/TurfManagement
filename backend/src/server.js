@@ -5,6 +5,7 @@ import { connectDB, disconnectDB } from './config/db.js';
 import { connectRedis } from './config/redis.js';
 import { initializeSocket } from './services/notifications/socketService.js';
 import { startBillingScheduler } from './jobs/billingScheduler.js';
+import { startReportScheduler } from './jobs/reportScheduler.js';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 
@@ -17,7 +18,9 @@ const bootstrap = async () => {
     await connectDB();
   } catch (dbError) {
     console.error('[startup] Database connection failed:', dbError);
-    throw dbError;
+    if (!isVercel) {
+      throw dbError;
+    }
   }
 
   const redis = await connectRedis();
@@ -42,6 +45,7 @@ const bootstrap = async () => {
   server.listen(env.port, () => {
     logger.info(`TurfCare BD API running in ${env.nodeEnv} mode on port ${env.port}`);
     startBillingScheduler();
+    startReportScheduler();
   });
 
   return app;

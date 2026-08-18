@@ -12,5 +12,9 @@ const subscriptionController = createSubscriptionController({ subscriptionServic
 router.get('/', asyncHandler(subscriptionController.getSubscription));
 router.put('/', permit('subscription.manage'), validate(updateSubscriptionSchema), asyncHandler(subscriptionController.updateSubscription));
 router.post('/checkout', permit('subscription.manage'), validate(checkoutSchema), asyncHandler(subscriptionController.createCheckoutSession));
+router.post('/checkout/bkash', permit('subscription.manage'), validate(checkoutSchema), asyncHandler(subscriptionController.createBkashCheckout));
+router.post('/checkout/nagad', permit('subscription.manage'), validate(checkoutSchema), asyncHandler(subscriptionController.createNagadCheckout));
+router.get('/payment/bkash/callback', asyncHandler(subscriptionController.handleBkashCallback));
+router.get('/payment/nagad/callback', asyncHandler(subscriptionController.handleNagadCallback));
 
 export default router;

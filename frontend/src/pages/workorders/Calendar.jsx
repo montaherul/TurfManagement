@@ -100,13 +100,13 @@ const Calendar = () => {
           <p className="text-slate-500 mt-1">Work orders scheduled by due date</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-slate-100 transition-colors">
+          <button onClick={handlePrevMonth} aria-label="Previous month" className="p-2 rounded-lg hover:bg-slate-100 transition-colors">
             <ChevronLeft className="w-5 h-5 text-slate-600" />
           </button>
           <span className="text-lg font-semibold text-slate-900 min-w-[180px] text-center">
             {format(currentMonth, 'MMMM yyyy')}
           </span>
-          <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-slate-100 transition-colors">
+          <button onClick={handleNextMonth} aria-label="Next month" className="p-2 rounded-lg hover:bg-slate-100 transition-colors">
             <ChevronRight className="w-5 h-5 text-slate-600" />
           </button>
         </div>

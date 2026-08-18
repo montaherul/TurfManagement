@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { logout } from '../../store/slices/authSlice';
 import { authService } from '../../services/authService';
 import {
@@ -16,7 +17,6 @@ import {
   Menu,
   X,
   ChevronRight,
-  Bell,
   PlusCircle,
   Calendar,
   WifiOff,
@@ -24,6 +24,7 @@ import {
 import toast from 'react-hot-toast';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { offlineQueue } from '../../utils/offlineQueue';
+import NotificationBell from './NotificationBell';
 
 const SidebarItem = ({ to, icon: Icon, label }) => (
   <NavLink
@@ -44,6 +45,7 @@ const SidebarItem = ({ to, icon: Icon, label }) => (
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { t } = useTranslation();
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -52,7 +54,7 @@ const Layout = () => {
   useEffect(() => {
     if (isOnline) {
       offlineQueue.processQueue().then((synced) => {
-        if (synced > 0) toast.success(`${synced} offline item(s) synced`);
+        if (synced > 0) toast.success(t('layout.syncComplete', { count: synced }));
       });
     }
   }, [isOnline]);
@@ -65,20 +67,20 @@ const Layout = () => {
     }
     dispatch(logout());
     navigate('/login');
-    toast.success('Logged out successfully');
+    toast.success(t('layout.loggedOut'));
   };
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['org_admin', 'inspector', 'viewer'] },
-    { to: '/fields', icon: Map, label: 'Fields', roles: ['org_admin', 'inspector', 'viewer'] },
-    { to: '/inspections', icon: ClipboardList, label: 'Inspections', roles: ['org_admin', 'inspector'] },
-    { to: '/inspections/new', icon: PlusCircle, label: 'New Inspection', roles: ['org_admin', 'inspector'] },
-    { to: '/work-orders', icon: Wrench, label: 'Work Orders', roles: ['org_admin', 'inspector', 'viewer'] },
-    { to: '/calendar', icon: Calendar, label: 'Calendar', roles: ['org_admin', 'inspector', 'viewer'] },
-    { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['org_admin'] },
-    { to: '/team', icon: Users, label: 'Team & Permissions', roles: ['org_admin'] },
-    { to: '/admin', icon: Shield, label: 'Admin', roles: ['super_admin'] },
-    { to: '/settings', icon: Settings, label: 'Settings', roles: ['super_admin', 'org_admin', 'inspector', 'viewer'] },
+    { to: '/', icon: LayoutDashboard, label: t('layout.dashboard'), roles: ['org_admin', 'inspector', 'viewer'] },
+    { to: '/fields', icon: Map, label: t('layout.fields'), roles: ['org_admin', 'inspector', 'viewer'] },
+    { to: '/inspections', icon: ClipboardList, label: t('layout.inspections'), roles: ['org_admin', 'inspector'] },
+    { to: '/inspections/new', icon: PlusCircle, label: t('layout.newInspection'), roles: ['org_admin', 'inspector'] },
+    { to: '/work-orders', icon: Wrench, label: t('layout.workOrders'), roles: ['org_admin', 'inspector', 'viewer'] },
+    { to: '/calendar', icon: Calendar, label: t('layout.calendar'), roles: ['org_admin', 'inspector', 'viewer'] },
+    { to: '/reports', icon: BarChart3, label: t('layout.reports'), roles: ['org_admin'] },
+    { to: '/team', icon: Users, label: t('layout.team'), roles: ['org_admin'] },
+    { to: '/admin', icon: Shield, label: t('layout.admin'), roles: ['super_admin'] },
+    { to: '/settings', icon: Settings, label: t('layout.settings'), roles: ['super_admin', 'org_admin', 'inspector', 'viewer'] },
   ];
 
   const filteredNavItems = navItems.filter((item) => item.roles.includes(user?.role));
@@ -129,7 +131,7 @@ const Layout = () => {
               className="mt-2 w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             >
               <LogOut className="w-4 h-4" />
-              Logout
+              {t('layout.logout')}
             </button>
           </div>
         </div>
@@ -143,7 +145,7 @@ const Layout = () => {
         {!isOnline && (
           <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2 flex items-center gap-2">
             <WifiOff className="w-4 h-4" />
-            You are offline. Some features may be limited.
+            {t('layout.offline')}
           </div>
         )}
         <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-slate-200">
@@ -156,14 +158,12 @@ const Layout = () => {
                 <Menu className="w-5 h-5 text-slate-600" />
               </button>
               <span className="hidden md:inline text-sm text-slate-500">
-                Welcome back, <span className="text-slate-900 font-medium">{user?.firstName || 'there'}</span>
+                {t('layout.welcomeBack', { name: user?.firstName || 'there' })}
               </span>
             </div>
 
             <div className="flex items-center gap-3">
-              <button className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors">
-                <Bell className="w-5 h-5 text-slate-600" />
-              </button>
+              <NotificationBell />
             </div>
           </div>
         </header>

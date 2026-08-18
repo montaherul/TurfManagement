@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Camera, Send, Save, X, ImagePlus } from 'lucide-react';
+import { ArrowLeft, Camera, Send, Save, X, ImagePlus, WifiOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDispatch } from 'react-redux';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { getFields } from '../../store/slices/fieldSlice';
 import { createInspection, submitInspection, getInspection, updateInspection } from '../../store/slices/inspectionSlice';
 import { uploadService } from '../../services/uploadService';
@@ -24,6 +25,7 @@ const NewInspection = () => {
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit') || null;
   const dispatch = useDispatch();
+  const isOnline = useOnlineStatus();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
@@ -259,6 +261,12 @@ const NewInspection = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {!isOnline && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3 flex items-center gap-2">
+          <WifiOff className="w-4 h-4" />
+          You are offline. Inspections will be saved locally and synced when you are back online.
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <button onClick={() => navigate('/inspections')} className="p-2 rounded-lg hover:bg-slate-100 transition-colors">
           <ArrowLeft className="w-5 h-5 text-slate-600" />

@@ -13,12 +13,14 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 import authRoutes from './routes/auth.js';
 import paymentRoutes from './routes/payments.js';
+import notificationRoutes from './routes/notifications.js';
 import organizationRoutes from './routes/organizations.js';
 import fieldRoutes from './routes/fields.js';
 import inspectionRoutes from './routes/inspections.js';
 import workOrderRoutes from './routes/workOrders.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import reportRoutes from './routes/reports.js';
+import reportScheduleRoutes from './routes/reportsSchedules.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/upload.js';
 import permissionRoutes from './routes/permissions.js';
@@ -60,11 +62,13 @@ export const createApp = ({ redis = null } = {}) => {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/payments', paymentRoutes);
+  app.use('/api/notifications', authMiddleware, notificationRoutes);
   app.use('/api/organizations', authMiddleware, tenantMiddleware, organizationRoutes);
   app.use('/api/fields', authMiddleware, tenantMiddleware, fieldRoutes);
   app.use('/api/inspections', authMiddleware, tenantMiddleware, inspectionRoutes);
   app.use('/api/work-orders', authMiddleware, tenantMiddleware, workOrderRoutes);
   app.use('/api/subscriptions', authMiddleware, tenantMiddleware, subscriptionRoutes);
+  app.use('/api/reports/schedules', authMiddleware, tenantMiddleware, reportScheduleRoutes);
   app.use('/api/reports', authMiddleware, tenantMiddleware, reportRoutes);
   app.use('/api/upload', authMiddleware, tenantMiddleware, uploadRoutes);
   app.use('/api/admin', authMiddleware, adminRoutes);
